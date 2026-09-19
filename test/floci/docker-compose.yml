@@ -1,0 +1,11 @@
+services:
+  floci:
+    image: floci/floci:latest-compat
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_SERVICES_EC2_MOCK: "true"
+      FLOCI_SERVICES_SSM_ENABLED: "true"
+      AWS_DEFAULT_REGION: "${FLOCI_REGION:-us-east-1}"
+    volumes:
+      - ./init/ready.d:/etc/floci/init/ready.d:ro
