@@ -49,7 +49,7 @@ flowchart TD
 
 ## 検索と選択
 
-検索準備ではプロファイルを検証し、ssmm 設定、検索条件、有効なリージョンを解決する。AWS SDK の設定は検索ごとに生成し、リージョン別の EC2・SSM クライアントを同じ実行単位内で再利用する。
+検索準備では、CLI フラグと任意で選択した ssmm プロファイルから AWS プロファイル、検索条件、有効なリージョンを解決する。ssmm プロファイルの指定がなければ設定ファイルを読み込まない。認証設定の検証と AWS SDK の生成には AWS プロファイルを使い、検索範囲と SSH の既定値には ssmm プロファイルを使う。AWS SDK の設定は検索ごとに生成し、リージョン別の EC2・SSM クライアントを同じ実行単位内で再利用する。
 
 `inventory` は各リージョンの取得結果をイベントに変換する。集約処理だけが結果のマップと進捗を更新し、読み取り側に複製したスナップショットを渡す。インスタンスの識別キーはリージョンとインスタンス ID の組である。
 
@@ -77,7 +77,7 @@ flowchart LR
 
 ## 設定保存
 
-`config` が設定と SSH ファイルの更新を調整する。`sshconfig` は更新するバイト列を生成し、ファイルを書き込まない。保存前に全プロファイルの検証と SSH 設定生成を済ませ、ファイル単位の置換を順番に行う。
+`config` が設定と SSH ファイルの更新を調整する。`init` は ssmm 設定だけを更新し、`ssh-config create` / `delete` は SSH ファイルも更新する。`sshconfig` は更新するバイト列を生成し、ファイルを書き込まない。保存前に全プロファイルを検証し、SSH ファイルを更新する場合は生成も済ませる。ファイル単位の置換を順番に行う。
 
 保存時の競合検出と部分失敗の扱いは、[仕様の設定保存](specification.md#設定保存) を参照。
 
@@ -90,6 +90,7 @@ flowchart LR
 | 依存関係の組み立て | [cmd/ssmm/main.go](../../cmd/ssmm/main.go) |
 | CLI と検索・選択 | [internal/cli/root.go](../../internal/cli/root.go) |
 | SSH・SCP・proxy・init | [internal/cli/commands.go](../../internal/cli/commands.go) |
+| 標準 SSH 設定の作成・削除 | [internal/cli/ssh_config.go](../../internal/cli/ssh_config.go) |
 | 検索準備 | [internal/app/service.go](../../internal/app/service.go) |
 | 候補からの対象確定 | [internal/app/resolve.go](../../internal/app/resolve.go) |
 | 検索の並行取得 | [internal/inventory/run.go](../../internal/inventory/run.go) |

@@ -65,6 +65,7 @@ const (
 )
 
 type ResolvedTarget struct {
+	// 接続に使う、解決済みの AWS プロファイル。
 	Profile    ProfileSelection
 	Region     string
 	InstanceID string

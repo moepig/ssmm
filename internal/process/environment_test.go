@@ -27,6 +27,9 @@ func TestEnvironmentNormalizesAWSProfileSelection(t *testing.T) {
 	if got := value(execplan.EnvironmentPolicy{Profile: "prod", ProfileSource: string(target.ProfileFlag)}, "AWS_PROFILE"); got != "" {
 		t.Fatalf("explicit profile inherited AWS_PROFILE=%q", got)
 	}
+	if got := value(execplan.EnvironmentPolicy{Profile: "prod", ProfileSource: string(target.ProfileConfig)}, "AWS_PROFILE"); got != "" {
+		t.Fatalf("configured profile inherited AWS_PROFILE=%q", got)
+	}
 	if got := value(execplan.EnvironmentPolicy{Profile: "default", ProfileSource: string(target.ProfileDefault)}, "AWS_PROFILE"); got != "" {
 		t.Fatalf("default profile inherited AWS_PROFILE=%q", got)
 	}

@@ -22,7 +22,7 @@ import (
 )
 
 func (c *CLI) sshCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "ssh [USER@]TARGET", Short: "connect using OpenSSH", Args: cobra.MaximumNArgs(1), RunE: c.runSSH}
+	cmd := &cobra.Command{Use: "ssh [USER@]TARGET", Short: "connect using OpenSSH (experimental)", Args: cobra.MaximumNArgs(1), RunE: c.runSSH}
 	addSearchFlags(cmd)
 	cmd.Flags().String("user", "", "SSH user")
 	cmd.Flags().String("identity-file", "", "SSH identity file")
@@ -31,21 +31,19 @@ func (c *CLI) sshCommand() *cobra.Command {
 }
 
 func (c *CLI) scpCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "scp [OPTIONS] SRC... DEST", Short: "copy files using OpenSSH", Args: cobra.MinimumNArgs(2), RunE: c.runSCP}
-	cmd.Flags().StringP("profile", "p", "", "AWS profile")
-	cmd.Flags().String("region", "", "limit search to one AWS region")
+	cmd := &cobra.Command{Use: "scp [OPTIONS] SRC... DEST", Short: "copy files using OpenSSH (experimental)", Args: cobra.MinimumNArgs(2), RunE: c.runSCP}
+	addConnectionFlags(cmd)
 	cmd.Flags().String("user", "", "SSH user")
 	cmd.Flags().String("identity-file", "", "SSH identity file")
 	cmd.Flags().Int("port", 0, "SSH port")
-	cmd.Flags().BoolP("recursive", "r", false, "copy directories recursively")
+	cmd.Flags().Bool("recursive", false, "copy directories recursively")
 	cmd.Flags().Bool("non-interactive", false, "disable target selection")
 	return cmd
 }
 
 func (c *CLI) proxyCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "proxy TARGET", Short: "run as an OpenSSH ProxyCommand", Args: cobra.ExactArgs(1), RunE: c.runProxy}
-	cmd.Flags().StringP("profile", "p", "", "AWS profile")
-	cmd.Flags().String("region", "", "AWS region")
+	addConnectionFlags(cmd)
 	cmd.Flags().Int("port", 22, "SSH port")
 	cmd.Flags().String("internal-profile-source", "", "internal profile source")
 	_ = cmd.Flags().MarkHidden("internal-profile-source")
@@ -56,19 +54,30 @@ func (c *CLI) initCommand() *cobra.Command {
 	var regions []string
 	var allRegions bool
 	cmd := &cobra.Command{Use: "init", Short: "create or update ssmm settings", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		ssh, _ := cmd.Flags().GetBool("ssh")
+		if !ssh && (cmd.Flags().Changed("user") || cmd.Flags().Changed("identity-file") || cmd.Flags().Changed("port")) {
+			return exitError(2, "--user, --identity-file, and --port require --ssh")
+		}
 		if c.deps.Store == nil {
 			return fmt.Errorf("settings store is unavailable")
 		}
-		draft, err := c.deps.Store.ReadForUpdate(cmd.Context())
+		draft, err := c.deps.Store.ReadForUpdate(cmd.Context(), false)
 		if err != nil {
 			return err
 		}
-		name := c.profile(cmd).Name
+		name := c.ssmmProfile(cmd).Name
 		profile := draft.Snapshot.Profiles[name]
-		if !cmd.Flags().Changed("regions") && !cmd.Flags().Changed("all-regions") && !cmd.Flags().Changed("user") && !cmd.Flags().Changed("identity-file") && !cmd.Flags().Changed("port") && !cmd.Flags().Changed("integration") && terminal.Available() {
-			if err := c.editInitInteractively(&profile); err != nil {
+		if !cmd.Flags().Changed("regions") && !cmd.Flags().Changed("all-regions") && !cmd.Flags().Changed("user") && !cmd.Flags().Changed("identity-file") && !cmd.Flags().Changed("port") && !cmd.Flags().Changed("profile") && !cmd.Flags().Changed("region") && terminal.Available() {
+			if err := c.editInitInteractively(&profile, ssh); err != nil {
 				return err
 			}
+		}
+		if cmd.Flags().Changed("profile") {
+			profile.AWSProfile, _ = cmd.Flags().GetString("profile")
+		}
+		if cmd.Flags().Changed("region") {
+			region, _ := cmd.Flags().GetString("region")
+			profile.Regions = &[]string{region}
 		}
 		if cmd.Flags().Changed("all-regions") {
 			if allRegions && cmd.Flags().Changed("regions") {
@@ -100,33 +109,26 @@ func (c *CLI) initCommand() *cobra.Command {
 		if cmd.Flags().Changed("port") {
 			profile.SSH.Port, _ = cmd.Flags().GetInt("port")
 		}
-		if cmd.Flags().Changed("integration") {
-			profile.Integration, _ = cmd.Flags().GetBool("integration")
-		}
 		if draft.Snapshot.Profiles == nil {
 			draft.Snapshot.Profiles = map[string]app.ProfileSettings{}
 		}
 		draft.Snapshot.Profiles[name] = profile
-		report, err := c.deps.Store.Commit(cmd.Context(), app.SettingsUpdate{Snapshot: draft.Snapshot, Original: draft.Original})
-		for _, file := range report.Files {
-			fmt.Fprintf(c.deps.Output, "%s: %s\n", file.Path, file.Status)
-		}
-		if err != nil {
-			return err
-		}
-		return nil
+		return c.commitSettings(cmd, draft)
 	}}
-	cmd.Flags().StringP("profile", "p", "", "AWS profile")
+	cmd.Flags().StringP("ssmm-profile", "s", "default", "ssmm profile to create or update")
+	cmd.Flags().StringP("profile", "p", "", "AWS profile to save")
+	cmd.Flags().StringP("region", "r", "", "single search region to save")
+	cmd.Flags().Bool("ssh", false, "configure SSH user, identity file, and port")
 	cmd.Flags().StringSliceVar(&regions, "regions", nil, "search regions")
 	cmd.Flags().BoolVar(&allRegions, "all-regions", false, "search all enabled regions")
-	cmd.Flags().String("user", "", "default SSH user")
-	cmd.Flags().String("identity-file", "", "default SSH identity file")
-	cmd.Flags().Int("port", 0, "default SSH port")
-	cmd.Flags().Bool("integration", false, "enable standard SSH integration")
+	cmd.MarkFlagsMutuallyExclusive("region", "regions", "all-regions")
+	cmd.Flags().String("user", "", "default SSH user (requires --ssh)")
+	cmd.Flags().String("identity-file", "", "default SSH identity file (requires --ssh)")
+	cmd.Flags().Int("port", 0, "default SSH port (requires --ssh)")
 	return cmd
 }
 
-func (c *CLI) editInitInteractively(profile *app.ProfileSettings) error {
+func (c *CLI) editInitInteractively(profile *app.ProfileSettings, ssh bool) error {
 	tty, err := terminal.Open()
 	if err != nil {
 		return err
@@ -166,11 +168,19 @@ func (c *CLI) editInitInteractively(profile *app.ProfileSettings) error {
 		return value, nil
 	}
 
+	value, err := read("AWS profile (empty = environment/default)", profile.AWSProfile)
+	if err != nil {
+		return err
+	}
+	if value != "" {
+		profile.AWSProfile = value
+	}
+
 	currentRegions := ""
 	if profile.Regions != nil {
 		currentRegions = strings.Join(*profile.Regions, ",")
 	}
-	value, err := read("Regions (comma separated, empty = all)", currentRegions)
+	value, err = read("Regions (comma separated, empty = all)", currentRegions)
 	if err != nil {
 		return err
 	}
@@ -187,6 +197,9 @@ func (c *CLI) editInitInteractively(profile *app.ProfileSettings) error {
 			regions = append(regions, part)
 		}
 		profile.Regions = &regions
+	}
+	if !ssh {
+		return nil
 	}
 	if value, err = read("SSH user", profile.SSH.User); err != nil {
 		return err
@@ -223,22 +236,6 @@ func (c *CLI) editInitInteractively(profile *app.ProfileSettings) error {
 		}
 		profile.SSH.Port = parsed
 	}
-	integration := "no"
-	if profile.Integration {
-		integration = "yes"
-	}
-	if value, err = read("SSH integration (yes/no)", integration); err != nil {
-		return err
-	} else if value != "" {
-		switch strings.ToLower(value) {
-		case "yes", "y", "true":
-			profile.Integration = true
-		case "no", "n", "false":
-			profile.Integration = false
-		default:
-			return exitError(2, "invalid integration value %q", value)
-		}
-	}
 	return nil
 }
 
@@ -264,7 +261,7 @@ func (c *CLI) runSSH(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	resolved := result.Target
-	profile := result.Settings.Profile(resolved.Profile.Name)
+	profile := result.Settings.Profile(result.Profile.Name)
 	identity, _ := cmd.Flags().GetString("identity-file")
 	if identity != "" {
 		cwd, _ := os.Getwd()
@@ -303,7 +300,7 @@ func (c *CLI) runSCP(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	resolved := result.Target
-	profile := result.Settings.Profile(resolved.Profile.Name)
+	profile := result.Settings.Profile(result.Profile.Name)
 	flagUser, _ := cmd.Flags().GetString("user")
 	user := flagUser
 	if transfer.User != "" {
@@ -343,7 +340,8 @@ func (c *CLI) runSCP(cmd *cobra.Command, args []string) error {
 func (c *CLI) runProxy(cmd *cobra.Command, args []string) error {
 	value := args[0]
 	profileName, _ := cmd.Flags().GetString("profile")
-	profileSet := cmd.Flags().Changed("profile")
+	ssmmName, _ := cmd.Flags().GetString("ssmm-profile")
+	ssmmSet := cmd.Flags().Changed("ssmm-profile")
 	region, _ := cmd.Flags().GetString("region")
 	port, _ := cmd.Flags().GetInt("port")
 	source, _ := cmd.Flags().GetString("internal-profile-source")
@@ -359,29 +357,44 @@ func (c *CLI) runProxy(cmd *cobra.Command, args []string) error {
 		return c.runProxyTarget(cmd, target.ResolvedTarget{Profile: selection, Region: req.Region, InstanceID: req.InstanceID, Method: target.ResolvedDirect}, port)
 	}
 	if host, err := proxy.ParseHost(value); err == nil {
-		if profileSet && profileName != host.Profile {
-			return exitError(2, "host profile %q conflicts with --profile %q", host.Profile, profileName)
+		if ssmmSet && ssmmName != host.Profile {
+			return exitError(2, "host profile %q conflicts with --ssmm-profile %q", host.Profile, ssmmName)
 		}
 		return c.proxySearch(cmd, target.ProfileSelection{Name: host.Profile, Source: target.ProfileHost}, host.Target, region, port)
 	}
 	if strings.HasSuffix(value, ".ssmm") {
 		return exitError(2, "invalid ssmm host %q", value)
 	}
-	selection := c.profile(cmd)
+	selection := c.ssmmProfile(cmd)
+	tags, err := parseTags(cmd)
+	if err != nil {
+		return exitError(2, "%v", err)
+	}
+	if _, err := target.ParseQuery(value, tags); err != nil {
+		return exitError(2, "%v", err)
+	}
 	if target.IsInstanceID(value) && region != "" {
+		settings, err := c.deps.Service.ReadSettings(cmd.Context(), selection)
+		if err != nil {
+			return err
+		}
+		selection = settings.AWSSelection(selection.Name, c.awsProfile(cmd))
 		return c.runProxyTarget(cmd, target.ResolvedTarget{Profile: selection, Region: region, InstanceID: value, Method: target.ResolvedDirect}, port)
 	}
 	return c.proxySearch(cmd, selection, value, region, port)
 }
 
 func (c *CLI) proxySearch(cmd *cobra.Command, selection target.ProfileSelection, name, region string, port int) error {
-	settings, scope, snapshot, query, err := c.deps.Service.Inventory(cmd.Context(), app.SearchRequest{Profile: selection, Target: name, Region: region})
+	tags, err := parseTags(cmd)
+	if err != nil {
+		return exitError(2, "%v", err)
+	}
+	settings, scope, snapshot, query, err := c.deps.Service.Inventory(cmd.Context(), app.SearchRequest{Profile: selection, AWSProfile: c.awsProfile(cmd), Target: name, Region: region, Tags: tags})
 	if err != nil {
 		return err
 	}
-	_ = settings
 	_ = scope
-	resolved, err := app.ResolveSnapshot(selection, snapshot, query, "", nil, target.ResolvedUnique)
+	resolved, err := app.ResolveSnapshot(settings.AWSSelection(selection.Name, c.awsProfile(cmd)), snapshot, query, "", nil, target.ResolvedUnique)
 	if err != nil {
 		return err
 	}

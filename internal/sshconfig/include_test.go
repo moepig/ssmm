@@ -26,7 +26,7 @@ func TestRenderManagedKeepsHostnameAndEncodesTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, expected := range []string{"Host *.prod.ssmm", "HostName %h", "CanonicalizeHostname no", "IdentityFile /tmp/key%%h", "Port 2222", "ProxyCommand '/tmp/ssmm' proxy '%h' --profile 'prod' --port '%p'", "ControlPath none"} {
+	for _, expected := range []string{"Host *.prod.ssmm", "HostName %h", "CanonicalizeHostname no", "IdentityFile /tmp/key%%h", "Port 2222", "ProxyCommand '/tmp/ssmm' proxy '%h' --ssmm-profile 'prod' --port '%p'", "ControlPath none"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("managed config lacks %q: %s", expected, text)
 		}

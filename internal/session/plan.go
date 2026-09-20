@@ -35,7 +35,7 @@ func Plan(req Request) (execplan.ProcessSpec, error) {
 	if req.Proxy {
 		args = append(args, "--document-name", "AWS-StartSSHSession", "--parameters", `{"portNumber":["`+strconv.Itoa(req.Port)+`"]}`)
 	}
-	if req.Target.Profile.Source == target.ProfileFlag || req.Target.Profile.Source == target.ProfileHost {
+	if req.Target.Profile.Source == target.ProfileConfig || req.Target.Profile.Source == target.ProfileFlag || req.Target.Profile.Source == target.ProfileHost {
 		args = append(args, "--profile", req.Target.Profile.Name)
 	}
 	return execplan.ProcessSpec{Executable: awsPath, Args: args, Mode: func() execplan.Mode {

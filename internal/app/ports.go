@@ -10,7 +10,7 @@ import (
 
 type SettingsStore interface {
 	Read(context.Context) (SettingsSnapshot, error)
-	ReadForUpdate(context.Context) (SettingsDraft, error)
+	ReadForUpdate(ctx context.Context, updateSSH bool) (SettingsDraft, error)
 	Commit(context.Context, SettingsUpdate) (SaveReport, error)
 }
 

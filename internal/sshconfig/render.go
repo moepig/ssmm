@@ -49,7 +49,7 @@ func RenderManaged(profiles []Profile, ssmmExecutable string) ([]byte, error) {
 		}
 		b.WriteString("    ProxyCommand ")
 		b.WriteString(shellQuote(ssmmExecutable))
-		b.WriteString(" proxy '%h' --profile ")
+		b.WriteString(" proxy '%h' --ssmm-profile ")
 		b.WriteString(shellQuote(profile.Name))
 		b.WriteString(" --port '%p'\n")
 		b.WriteString("    ControlPath none\n\n")

@@ -27,20 +27,24 @@ func (s AppStore) Read(context.Context) (app.SettingsSnapshot, error) {
 	return toSnapshot(settings, s.Paths.ConfigFile), nil
 }
 
-func (s AppStore) ReadForUpdate(ctx context.Context) (app.SettingsDraft, error) {
+func (s AppStore) ReadForUpdate(ctx context.Context, updateSSH bool) (app.SettingsDraft, error) {
 	snapshot, err := s.Read(ctx)
 	if err != nil {
 		return app.SettingsDraft{}, err
 	}
 	original := map[string]app.FileState{}
-	for _, path := range []string{s.Paths.ConfigFile, s.Paths.SSHManagedFile, s.Paths.SSHConfigFile} {
+	paths := []string{s.Paths.ConfigFile}
+	if updateSSH {
+		paths = append(paths, s.Paths.SSHManagedFile, s.Paths.SSHConfigFile)
+	}
+	for _, path := range paths {
 		state, err := readFileState(path)
 		if err != nil {
 			return app.SettingsDraft{}, err
 		}
 		original[path] = state
 	}
-	return app.SettingsDraft{Snapshot: snapshot, Original: original}, nil
+	return app.SettingsDraft{Snapshot: snapshot, Original: original, UpdateSSH: updateSSH}, nil
 }
 
 func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.SaveReport, error) {
@@ -69,28 +73,31 @@ func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.Sa
 	if err != nil {
 		return app.SaveReport{}, err
 	}
-	profiles := make([]sshconfig.Profile, 0, len(update.Snapshot.Profiles))
-	for name, profile := range update.Snapshot.Profiles {
-		profiles = append(profiles, sshconfig.Profile{Name: name, User: profile.SSH.User, IdentityFile: profile.SSH.IdentityFile, Port: profile.SSH.Port, Integration: profile.Integration})
-	}
-	managed, err := sshconfig.RenderManaged(profiles, s.SSMMExecutable)
-	if err != nil {
-		return app.SaveReport{}, fmt.Errorf("generate %s: %w", s.Paths.SSHManagedFile, err)
-	}
-	existing, err := os.ReadFile(s.Paths.SSHConfigFile)
-	if err != nil && !os.IsNotExist(err) {
-		return app.SaveReport{}, err
-	}
-	integration := false
-	for _, profile := range update.Snapshot.Profiles {
-		if profile.Integration {
-			integration = true
-			break
+	var managed, updated []byte
+	if update.UpdateSSH {
+		profiles := make([]sshconfig.Profile, 0, len(update.Snapshot.Profiles))
+		for name, profile := range update.Snapshot.Profiles {
+			profiles = append(profiles, sshconfig.Profile{Name: name, User: profile.SSH.User, IdentityFile: profile.SSH.IdentityFile, Port: profile.SSH.Port, Integration: profile.Integration})
 		}
-	}
-	updated := sshconfig.RemoveInclude(existing, s.Paths.SSHManagedFile)
-	if integration {
-		updated = sshconfig.EnsureInclude(existing, s.Paths.SSHManagedFile)
+		managed, err = sshconfig.RenderManaged(profiles, s.SSMMExecutable)
+		if err != nil {
+			return app.SaveReport{}, fmt.Errorf("generate %s: %w", s.Paths.SSHManagedFile, err)
+		}
+		existing, err := os.ReadFile(s.Paths.SSHConfigFile)
+		if err != nil && !os.IsNotExist(err) {
+			return app.SaveReport{}, err
+		}
+		integration := false
+		for _, profile := range update.Snapshot.Profiles {
+			if profile.Integration {
+				integration = true
+				break
+			}
+		}
+		updated = sshconfig.RemoveInclude(existing, s.Paths.SSHManagedFile)
+		if integration {
+			updated = sshconfig.EnsureInclude(existing, s.Paths.SSHManagedFile)
+		}
 	}
 	report := app.SaveReport{}
 	if err := WriteAtomic(s.Paths.ConfigFile, data, 0o600); err != nil {
@@ -98,6 +105,9 @@ func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.Sa
 		return report, fmt.Errorf("save %s: %w", s.Paths.ConfigFile, err)
 	}
 	report.Files = append(report.Files, app.SaveFile{Path: s.Paths.ConfigFile, Status: "saved"})
+	if !update.UpdateSSH {
+		return report, nil
+	}
 	if err := WriteAtomic(s.Paths.SSHManagedFile, managed, 0o600); err != nil {
 		report.Files = append(report.Files, app.SaveFile{Path: s.Paths.SSHManagedFile, Status: "failed", Err: err})
 		return report, fmt.Errorf("save %s: %w", s.Paths.SSHManagedFile, err)
@@ -114,7 +124,7 @@ func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.Sa
 func toSnapshot(settings Settings, path string) app.SettingsSnapshot {
 	snapshot := app.SettingsSnapshot{ConfigPath: path, ConfigDir: filepath.Dir(path), Profiles: map[string]app.ProfileSettings{}}
 	for name, profile := range settings.Profiles {
-		p := app.ProfileSettings{Integration: profile.SSH.Integration, StoredIdentityFile: profile.SSH.IdentityFile, SSH: app.SSHOptions{User: profile.SSH.User, Port: profile.SSH.Port}}
+		p := app.ProfileSettings{AWSProfile: profile.AWSProfile, Integration: profile.SSH.Integration, StoredIdentityFile: profile.SSH.IdentityFile, SSH: app.SSHOptions{User: profile.SSH.User, Port: profile.SSH.Port}}
 		if profile.Regions != nil {
 			regions := append([]string(nil), (*profile.Regions)...)
 			p.Regions = &regions
@@ -137,7 +147,7 @@ func fromSnapshot(snapshot app.SettingsSnapshot) Settings {
 		if identity == "" {
 			identity = profile.SSH.IdentityFile
 		}
-		p := Profile{SSH: SSH{User: profile.SSH.User, IdentityFile: identity, Port: profile.SSH.Port, Integration: profile.Integration}}
+		p := Profile{AWSProfile: profile.AWSProfile, SSH: SSH{User: profile.SSH.User, IdentityFile: identity, Port: profile.SSH.Port, Integration: profile.Integration}}
 		if profile.Regions != nil {
 			regions := append([]string(nil), (*profile.Regions)...)
 			p.Regions = &regions

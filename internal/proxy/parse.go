@@ -60,7 +60,7 @@ func (r InternalRequest) Validate(environProfile string) error {
 		return fmt.Errorf("internal proxy profile is empty")
 	}
 	switch r.Source {
-	case "flag", "host":
+	case "config", "flag", "host":
 	case "env":
 		if environProfile == "" || environProfile != r.Profile {
 			return fmt.Errorf("internal proxy environment profile does not match")

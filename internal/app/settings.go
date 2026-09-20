@@ -9,6 +9,7 @@ type SettingsSnapshot struct {
 }
 
 type ProfileSettings struct {
+	AWSProfile         string
 	Regions            *[]string
 	SSH                SSHOptions
 	StoredIdentityFile string
@@ -29,12 +30,14 @@ func (s SettingsSnapshot) Profile(name string) ProfileSettings {
 }
 
 type SettingsDraft struct {
-	Snapshot SettingsSnapshot
-	Original map[string]FileState
+	UpdateSSH bool
+	Snapshot  SettingsSnapshot
+	Original  map[string]FileState
 }
 type SettingsUpdate struct {
-	Snapshot SettingsSnapshot
-	Original map[string]FileState
+	UpdateSSH bool
+	Snapshot  SettingsSnapshot
+	Original  map[string]FileState
 }
 type FileState struct {
 	Path     string
@@ -90,4 +93,18 @@ type SCPTransfer struct {
 	Remote    []SCPRemote
 	User      string
 	Target    string
+}
+
+// コマンドライン、ssmm 設定、環境変数、既定値の順に AWS プロファイルを選択する。
+func (s SettingsSnapshot) AWSSelection(name string, fallback target.ProfileSelection) target.ProfileSelection {
+	if fallback.Source == target.ProfileFlag {
+		return fallback
+	}
+	if profile := s.Profile(name).AWSProfile; profile != "" {
+		return target.ProfileSelection{Name: profile, Source: target.ProfileConfig}
+	}
+	if fallback.Name == "" {
+		return target.ProfileSelection{Name: "default", Source: target.ProfileDefault}
+	}
+	return fallback
 }

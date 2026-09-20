@@ -28,7 +28,7 @@ func ProxyCommand(executable, instanceID, region string, port int, profile, sour
 	}
 	values := []string{executable, "proxy", instanceID, "--region", region, "--port", fmt.Sprint(port), "--profile", profile, "--internal-profile-source", source}
 	if standardTokens {
-		values = []string{executable, "proxy", "%h", "--port", "%p", "--profile", profile}
+		values = []string{executable, "proxy", "%h", "--port", "%p", "--ssmm-profile", profile}
 	}
 	parts := make([]string, 0, len(values))
 	for _, value := range values {

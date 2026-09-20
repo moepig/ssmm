@@ -14,13 +14,13 @@ func TestAppStoreCommitWritesConfigAndSSHIntegration(t *testing.T) {
 	root := t.TempDir()
 	paths := Paths{ConfigFile: filepath.Join(root, "config.toml"), SSHManagedFile: filepath.Join(root, "ssh", "ssmm", "config"), SSHConfigFile: filepath.Join(root, "ssh", "config"), LockFile: filepath.Join(root, "lock")}
 	store := NewAppStore(paths, "/usr/local/bin/ssmm")
-	draft, err := store.ReadForUpdate(context.Background())
+	draft, err := store.ReadForUpdate(context.Background(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	regions := []string{"us-east-1"}
 	draft.Snapshot.Profiles["prod"] = app.ProfileSettings{Regions: &regions, Integration: true, SSH: app.SSHOptions{User: "ec2-user", Port: 22}}
-	if _, err := store.Commit(context.Background(), app.SettingsUpdate{Snapshot: draft.Snapshot, Original: draft.Original}); err != nil {
+	if _, err := store.Commit(context.Background(), app.SettingsUpdate{UpdateSSH: true, Snapshot: draft.Snapshot, Original: draft.Original}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(paths.ConfigFile)
@@ -63,7 +63,7 @@ func TestAppStoreCommitRejectsInvalidUpdateBeforeChangingFiles(t *testing.T) {
 	if err := os.WriteFile(paths.SSHConfigFile, []byte("Include existing\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	draft, err := store.ReadForUpdate(context.Background())
+	draft, err := store.ReadForUpdate(context.Background(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestAppStoreCommitRejectsInvalidUpdateBeforeChangingFiles(t *testing.T) {
 	profile.SSH.Port = -1
 	draft.Snapshot.Profiles["prod"] = profile
 	before := readFiles(t, paths)
-	if report, err := store.Commit(context.Background(), app.SettingsUpdate{Snapshot: draft.Snapshot, Original: draft.Original}); err == nil {
+	if report, err := store.Commit(context.Background(), app.SettingsUpdate{UpdateSSH: true, Snapshot: draft.Snapshot, Original: draft.Original}); err == nil {
 		t.Fatalf("invalid update was accepted, report=%#v", report)
 	}
 	after := readFiles(t, paths)
@@ -98,13 +98,13 @@ func TestAppStoreCommitGeneratesBeforeSavingInvalidSSHIntegration(t *testing.T) 
 	if err := os.WriteFile(paths.SSHConfigFile, []byte("ssh-before\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	draft, err := store.ReadForUpdate(context.Background())
+	draft, err := store.ReadForUpdate(context.Background(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	draft.Snapshot.Profiles["Prod_Profile"] = app.ProfileSettings{Integration: true}
 	before := readFiles(t, paths)
-	if report, err := store.Commit(context.Background(), app.SettingsUpdate{Snapshot: draft.Snapshot, Original: draft.Original}); err == nil {
+	if report, err := store.Commit(context.Background(), app.SettingsUpdate{UpdateSSH: true, Snapshot: draft.Snapshot, Original: draft.Original}); err == nil {
 		t.Fatalf("invalid SSH profile was accepted, report=%#v", report)
 	}
 	after := readFiles(t, paths)
@@ -128,7 +128,7 @@ func TestAppStoreCommitReportsPartialWriteFailure(t *testing.T) {
 	if err := os.WriteFile(paths.SSHManagedFile, []byte("before\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	draft, err := store.ReadForUpdate(context.Background())
+	draft, err := store.ReadForUpdate(context.Background(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestAppStoreCommitReportsPartialWriteFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chmod(parent, 0o700)
-	report, err := store.Commit(context.Background(), app.SettingsUpdate{Snapshot: draft.Snapshot, Original: draft.Original})
+	report, err := store.Commit(context.Background(), app.SettingsUpdate{UpdateSSH: true, Snapshot: draft.Snapshot, Original: draft.Original})
 	if err == nil {
 		t.Fatal("write failure was accepted")
 	}

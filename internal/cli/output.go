@@ -55,6 +55,9 @@ func PrintList(w io.Writer, snapshot inventory.InventorySnapshot, profile string
 		}
 		return nil
 	case "table":
+		if profile == "" {
+			profile = "(none)"
+		}
 		if _, err := fmt.Fprintln(w, render.Line(0, 4, "Profile: "+profile, fmt.Sprintf("Regions: %d / %d completed", completedRegions(snapshot), len(scope.Regions)))); err != nil {
 			return err
 		}

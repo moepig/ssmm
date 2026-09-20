@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/uncho/ssmm/internal/target"
 )
 
 type Settings struct {
@@ -17,8 +18,9 @@ type Settings struct {
 }
 
 type Profile struct {
-	Regions *[]string `toml:"regions"`
-	SSH     SSH       `toml:"ssh"`
+	AWSProfile string    `toml:"aws_profile,omitempty"`
+	Regions    *[]string `toml:"regions"`
+	SSH        SSH       `toml:"ssh,omitempty"`
 }
 
 type SSH struct {
@@ -87,6 +89,11 @@ func (s Settings) ValidateProfile(name, configDir string) error {
 	if !ok {
 		return nil
 	}
+	if profile.AWSProfile != "" {
+		if err := target.ValidateProfileName(profile.AWSProfile); err != nil {
+			return fmt.Errorf("profiles.%s.aws_profile: %w", name, err)
+		}
+	}
 	if profile.Regions != nil {
 		if len(*profile.Regions) == 0 {
 			return fmt.Errorf("profiles.%s.regions must not be empty", name)
@@ -129,6 +136,11 @@ func (s Settings) Validate(configDir string) error {
 	for name, profile := range s.Profiles {
 		if err := ValidateProfileName(name); err != nil {
 			return err
+		}
+		if profile.AWSProfile != "" {
+			if err := target.ValidateProfileName(profile.AWSProfile); err != nil {
+				return fmt.Errorf("profiles.%s.aws_profile: %w", name, err)
+			}
 		}
 		if profile.Regions != nil {
 			if len(*profile.Regions) == 0 {

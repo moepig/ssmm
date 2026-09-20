@@ -35,6 +35,7 @@ func TestFactoryUsesSelectedProfileWhenDefaultProfileEnvironmentDiffers(t *testi
 		{name: "default", selection: target.ProfileSelection{Name: "default", Source: target.ProfileDefault}, wantKey: "DEFAULT"},
 		{name: "environment", selection: target.ProfileSelection{Name: "prod", Source: target.ProfileEnv}, wantKey: "PROD"},
 		{name: "explicit", selection: target.ProfileSelection{Name: "prod", Source: target.ProfileFlag}, wantKey: "PROD"},
+		{name: "ssmm config", selection: target.ProfileSelection{Name: "prod", Source: target.ProfileConfig}, wantKey: "PROD"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

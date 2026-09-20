@@ -175,7 +175,7 @@ func environment(policy execplan.EnvironmentPolicy) []string {
 		if strings.HasPrefix(item, "AWS_DEFAULT_PROFILE=") {
 			continue
 		}
-		if (policy.ProfileSource == string(target.ProfileFlag) || policy.ProfileSource == string(target.ProfileHost) || policy.ProfileSource == string(target.ProfileDefault)) && strings.HasPrefix(item, "AWS_PROFILE=") {
+		if (policy.ProfileSource == string(target.ProfileConfig) || policy.ProfileSource == string(target.ProfileFlag) || policy.ProfileSource == string(target.ProfileHost) || policy.ProfileSource == string(target.ProfileDefault)) && strings.HasPrefix(item, "AWS_PROFILE=") {
 			continue
 		}
 		if policy.UnsetPager && strings.HasPrefix(item, "AWS_PAGER=") {

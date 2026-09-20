@@ -70,7 +70,7 @@ func (f Factory) OpenRegion(ctx context.Context, selection target.ProfileSelecti
 func loadSDKConfig(ctx context.Context, selection target.ProfileSelection, region string) (awssdk.Config, error) {
 	options := make([]func(*sdkconfig.LoadOptions) error, 0, 2)
 	switch selection.Source {
-	case target.ProfileFlag, target.ProfileHost:
+	case target.ProfileConfig, target.ProfileFlag, target.ProfileHost:
 		options = append(options, sdkconfig.WithSharedConfigProfile(selection.Name))
 	case target.ProfileEnv:
 		// AWS_PROFILE remains the SDK and CLI profile selector.

@@ -48,20 +48,28 @@ func New(deps Dependencies) *cobra.Command {
 	root := &cobra.Command{Use: "ssmm [TARGET]", Short: "connect to EC2 instances through AWS Systems Manager", SilenceUsage: true, SilenceErrors: true, Args: cobra.MaximumNArgs(1)}
 	root.SetOut(deps.Output)
 	root.SetErr(deps.Error)
-	root.Flags().StringP("profile", "p", "", "AWS profile")
-	root.Flags().String("region", "", "limit search to one AWS region")
-	root.Flags().String("filter", "", "case-insensitive partial-match filter")
-	root.Flags().StringArray("tag", nil, "EC2 tag filter KEY=VALUE (repeatable)")
-	root.Flags().Bool("non-interactive", false, "disable target selection")
+	addSearchFlags(root)
 	root.RunE = c.runConnect
-	root.AddCommand(c.listCommand(), c.connectCommand(), c.sshCommand(), c.scpCommand(), c.proxyCommand(), c.initCommand())
+	root.AddCommand(c.listCommand(), c.connectCommand(), c.sshCommand(), c.scpCommand(), c.proxyCommand(), c.initCommand(), c.sshConfigCommand())
 	return root
 }
 
-func (c *CLI) profile(cmd *cobra.Command) target.ProfileSelection {
+func (c *CLI) ssmmProfile(cmd *cobra.Command) target.ProfileSelection {
+	value, _ := cmd.Flags().GetString("ssmm-profile")
+	if cmd.Flags().Changed("ssmm-profile") {
+		return target.ProfileSelection{Name: value, Source: target.ProfileFlag}
+	}
+	if value == "default" {
+		return target.ProfileSelection{Name: value, Source: target.ProfileDefault}
+	}
+	return target.ProfileSelection{}
+}
+
+func (c *CLI) awsProfile(cmd *cobra.Command) target.ProfileSelection {
 	value, _ := cmd.Flags().GetString("profile")
 	return awsconfig.SelectionFromFlags(value, cmd.Flags().Changed("profile"))
 }
+
 func (c *CLI) common(cmd *cobra.Command, targetName string, nonInteractive bool) (app.SearchResult, error) {
 	req, err := c.searchRequest(cmd, targetName)
 	if err != nil {
@@ -78,7 +86,7 @@ func (c *CLI) searchRequest(cmd *cobra.Command, targetName string) (app.SearchRe
 	if err != nil {
 		return app.SearchRequest{}, err
 	}
-	return app.SearchRequest{Profile: c.profile(cmd), Target: stripUser(targetName), Region: region, Filter: filter, Tags: tags}, nil
+	return app.SearchRequest{Profile: c.ssmmProfile(cmd), AWSProfile: c.awsProfile(cmd), Target: stripUser(targetName), Region: region, Filter: filter, Tags: tags}, nil
 }
 func parseTags(cmd *cobra.Command) ([]target.TagFilter, error) {
 	if cmd.Flags().Lookup("tag") == nil {
@@ -108,7 +116,7 @@ func (c *CLI) listCommand() *cobra.Command {
 		if err != nil {
 			return exitError(2, "%v", err)
 		}
-		settings, scope, snapshot, _, err := c.deps.Service.Inventory(cmd.Context(), app.SearchRequest{Profile: c.profile(cmd), Region: region, Filter: filter, Tags: tags})
+		settings, scope, snapshot, _, err := c.deps.Service.Inventory(cmd.Context(), app.SearchRequest{Profile: c.ssmmProfile(cmd), AWSProfile: c.awsProfile(cmd), Region: region, Filter: filter, Tags: tags})
 		if err != nil {
 			return err
 		}
@@ -116,7 +124,7 @@ func (c *CLI) listCommand() *cobra.Command {
 			PrintDiagnostics(c.deps.Error, snapshot)
 			return exitError(1, "EC2 inventory is incomplete")
 		}
-		if err := PrintList(c.deps.Output, filteredSnapshot(snapshot, filter), c.profile(cmd).Name, scope, format); err != nil {
+		if err := PrintList(c.deps.Output, filteredSnapshot(snapshot, filter), c.ssmmProfile(cmd).Name, scope, format); err != nil {
 			return err
 		}
 		PrintDiagnostics(c.deps.Error, snapshot)
@@ -140,11 +148,16 @@ func (c *CLI) connectCommand() *cobra.Command {
 }
 
 func addSearchFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("profile", "p", "", "AWS profile")
-	cmd.Flags().String("region", "", "limit search to one AWS region")
+	addConnectionFlags(cmd)
 	cmd.Flags().String("filter", "", "case-insensitive partial-match filter")
-	cmd.Flags().StringArray("tag", nil, "EC2 tag filter KEY=VALUE (repeatable)")
 	cmd.Flags().Bool("non-interactive", false, "disable target selection")
+}
+
+func addConnectionFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP("ssmm-profile", "s", "", "optional ssmm profile")
+	cmd.Flags().StringP("profile", "p", "", "AWS profile (overrides ssmm settings)")
+	cmd.Flags().StringP("region", "r", "", "limit search to one AWS region")
+	cmd.Flags().StringArrayP("tag", "t", nil, "EC2 tag filter KEY=VALUE (repeatable)")
 }
 
 func (c *CLI) runConnect(cmd *cobra.Command, args []string) error {
@@ -185,7 +198,7 @@ func (c *CLI) runInventory(cmd *cobra.Command, name string, nonInteractive bool)
 	if err != nil {
 		return app.SearchResult{}, err
 	}
-	return app.SearchResult{Profile: req.Profile, Settings: settings, Scope: scope, Snapshot: snapshot, Query: q, Filter: req.Filter}, nil
+	return app.SearchResult{Profile: req.Profile, AWSProfile: settings.AWSSelection(req.Profile.Name, req.AWSProfile), Settings: settings, Scope: scope, Snapshot: snapshot, Query: q, Filter: req.Filter}, nil
 }
 
 func (c *CLI) searchAndChoose(cmd *cobra.Command, name string, nonInteractive bool) (app.SearchResult, error) {
@@ -249,26 +262,27 @@ func (c *CLI) interactiveSearch(cmd *cobra.Command, req app.SearchRequest) (app.
 			return app.SearchResult{}, fmt.Errorf("no instance selected")
 		}
 		key := selection.Key
-		resolved, err := app.ResolveSnapshot(search.Profile, selection.Snapshot, search.Query, selection.Filter, &key, target.ResolvedManual)
+		resolved, err := app.ResolveSnapshot(search.AWSProfile, selection.Snapshot, search.Query, selection.Filter, &key, target.ResolvedManual)
 		if err != nil {
 			return app.SearchResult{}, err
 		}
-		return app.SearchResult{Profile: search.Profile, Settings: search.Settings, Scope: search.Scope, Snapshot: selection.Snapshot, Target: resolved, Query: search.Query, Filter: selection.Filter}, nil
+		return app.SearchResult{Profile: search.Profile, AWSProfile: search.AWSProfile, Settings: search.Settings, Scope: search.Scope, Snapshot: selection.Snapshot, Target: resolved, Query: search.Query, Filter: selection.Filter}, nil
 	}
 }
 
 func (c *CLI) choose(ctx context.Context, result app.SearchResult, name string, nonInteractive bool) (target.ResolvedTarget, error) {
 	filter := result.Filter
 	query := result.Query
+	profile := result.AWSProfile
 	if name != "" && result.Snapshot.Finished && result.Snapshot.EC2Complete && len(app.Candidates(result.Snapshot, query, filter)) == 1 {
-		resolved, err := app.ResolveSnapshot(result.Profile, result.Snapshot, query, filter, nil, target.ResolvedUnique)
+		resolved, err := app.ResolveSnapshot(profile, result.Snapshot, query, filter, nil, target.ResolvedUnique)
 		if err != nil {
 			return target.ResolvedTarget{}, err
 		}
 		return resolved, nil
 	}
 	if nonInteractive || !terminal.Available() {
-		resolved, err := app.ResolveSnapshot(result.Profile, result.Snapshot, query, filter, nil, target.ResolvedUnique)
+		resolved, err := app.ResolveSnapshot(profile, result.Snapshot, query, filter, nil, target.ResolvedUnique)
 		if err != nil {
 			return target.ResolvedTarget{}, err
 		}
@@ -286,7 +300,7 @@ func (c *CLI) choose(ctx context.Context, result app.SearchResult, name string, 
 	if selection.Canceled {
 		return target.ResolvedTarget{}, exitError(130, "selection canceled")
 	}
-	return app.ResolveSnapshot(result.Profile, result.Snapshot, query, selection.Filter, &selection.Key, target.ResolvedManual)
+	return app.ResolveSnapshot(profile, result.Snapshot, query, selection.Filter, &selection.Key, target.ResolvedManual)
 }
 
 func stripUser(value string) string {

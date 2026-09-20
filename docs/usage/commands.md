@@ -12,15 +12,17 @@
 | `ssmm connect [TARGET]` | 検索と対象選択の後にシェル接続 |
 | `ssmm list` | EC2 と SSM 状態の一覧出力 |
 | `ssmm ssh [USER@TARGET]` | 検索と対象選択の後に OpenSSH で接続。対象省略も可能 |
-| `ssmm scp [OPTIONS] SRC... DEST` | ローカルと 1 台の EC2 の間でファイル転送 |
+| `ssmm scp [OPTIONS] SRC... DEST` | ローカルと 1 台の EC2 の間でファイル転送。experimental |
 | `ssmm proxy TARGET` | OpenSSH の `ProxyCommand` 用の通信ストリーム |
-| `ssmm init` | ssmm 設定と SSH 連携の更新 |
+| `ssmm init` | AWS プロファイル名と検索リージョンを保存。`--ssh` 指定時は SSH の既定値も設定 |
+| `ssmm ssh-config create` | 選択したプロファイルの標準 SSH 用設定を作成・更新 |
+| `ssmm ssh-config delete` | 選択したプロファイルの標準 SSH 用設定を削除 |
 | `ssmm completion SHELL` | シェル補完スクリプトを出力 |
 | `ssmm help [COMMAND]` | ヘルプを表示 |
 
-各コマンドのフラグは `ssmm COMMAND --help` で確認できる。サブコマンドを使う場合は、その後にフラグを記述する。`-p` は常に AWS プロファイルであり、SSH のポートや `scp` の属性保持を意味しない。
+各コマンドのフラグは `ssmm COMMAND --help` で確認できる。サブコマンドを使う場合は、その後にフラグを記述する。`-p` は AWS プロファイル、`-r` はリージョン、`-t` は EC2 タグ、`-s` は ssmm プロファイルを指定する。`init` を実行せずに検索・接続できる。
 
-SSH、転送、proxy の操作例は [SSH とファイル転送](ssh.md)、`init` の操作は [設定](configuration.md) を参照。
+SSH、転送、proxy、`ssh-config` の操作例は [SSH とファイル転送](ssh.md)、`init` の操作と保存対象は [設定](configuration.md) を参照。
 
 ## 検索フラグ
 
@@ -28,11 +30,21 @@ SSH、転送、proxy の操作例は [SSH とファイル転送](ssh.md)、`init
 
 | フラグ | 動作 | 対応コマンド |
 | --- | --- | --- |
-| `--profile NAME` / `-p NAME` | AWS プロファイルを選択 | 全コマンド |
-| `--region REGION` | 1 リージョンに限定 | `init` 以外 |
+| `--profile NAME` / `-p NAME` | AWS プロファイルを選択 | ルート、`connect`、`list`、`ssh`、`scp`、`proxy` |
+| `--ssmm-profile NAME` / `-s NAME` | 保存済みの ssmm プロファイルを選択 | ルート、`connect`、`list`、`ssh`、`scp`、`proxy` |
+| `--region REGION` / `-r REGION` | 1 リージョンに限定 | ルート、`connect`、`list`、`ssh`、`scp`、`proxy` |
 | `--filter TEXT` | 大文字・小文字を区別しない部分一致 | ルート、`connect`、`list`、`ssh` |
-| `--tag KEY=VALUE` | EC2 タグの完全一致。繰り返し指定可能 | ルート、`connect`、`list`、`ssh` |
+| `--tag KEY=VALUE` / `-t KEY=VALUE` | EC2 タグの完全一致。繰り返し指定可能 | ルート、`connect`、`list`、`ssh`、`scp`、`proxy` |
 | `--non-interactive` | 対象選択画面を開かず、候補の一意性を要求 | ルート、`connect`、`ssh`、`scp` |
+
+ssmm プロファイルを指定しない場合は設定ファイルを読み込まない。`-s` を指定した場合も、実行時の `-p` と `-r` が保存値より優先する。`init` と `ssh-config` の保存先指定は、[設定](configuration.md) を参照。
+
+初期設定なしで AWS プロファイル、リージョン、タグを指定する例を、以下に示す。
+
+```sh
+ssmm -p company-prod -r ap-northeast-1 -t Environment=production
+ssmm list -p company-prod -r ap-northeast-1 -t Service=web
+```
 
 `list` も `--non-interactive` を受け付けるが、指定の有無によらず選択画面は開かない。`proxy` も常に非対話である。
 
@@ -45,8 +57,8 @@ TARGET は Name またはインスタンス ID である。`i-` に続く 8 桁�
 Name とタグを組み合わせる例を、以下に示す。
 
 ```sh
-ssmm connect web-01 -p prod --tag Environment=production
-ssmm list -p prod --tag Environment=production --tag Service=web
+ssmm connect web-01 -p company-prod --tag Environment=production
+ssmm list -p company-prod --tag Environment=production --tag Service=web
 ```
 
 ### 部分一致フィルタ
@@ -56,8 +68,8 @@ ssmm list -p prod --tag Environment=production --tag Service=web
 部分一致を使う例を、以下に示す。
 
 ```sh
-ssmm list -p prod --filter 'web ap-northeast-1'
-ssmm connect -p prod --filter web
+ssmm list -p company-prod --filter 'web ap-northeast-1'
+ssmm connect -p company-prod --filter web
 ```
 
 ## 対象選択
@@ -82,7 +94,7 @@ ssmm connect -p prod --filter web
 一意な対象へ選択画面を開かずに接続する例を、以下に示す。
 
 ```sh
-ssmm connect web-01 -p prod --region ap-northeast-1 --non-interactive
+ssmm connect web-01 -p company-prod --region ap-northeast-1 --non-interactive
 ```
 
 `--non-interactive` が無効にするのは ssmm の対象選択である。SSH のホスト鍵確認、鍵のパスフレーズなど、外部コマンドの入力は別に発生し得る。
@@ -98,16 +110,16 @@ ssmm connect web-01 -p prod --region ap-northeast-1 --non-interactive
 
 | `--output` | 標準出力 |
 | --- | --- |
-| `table` または省略 | プロファイル、検索範囲、取得状況、および `NAME`・`REGION`・`INSTANCE ID`・`STATE`・`SSM` の表 |
+| `table` または省略 | ssmm プロファイル（未指定時は `(none)`）、検索範囲、取得状況、および `NAME`・`REGION`・`INSTANCE ID`・`STATE`・`SSM` の表 |
 | `json` | インスタンスの JSON 配列 |
 | `id` | 1 行に 1 つのインスタンス ID |
 
 形式を切り替える例を、以下に示す。
 
 ```sh
-ssmm list -p prod --tag Name=web-01
-ssmm list -p prod --output json
-ssmm list -p prod --region ap-northeast-1 --output id
+ssmm list -p company-prod --tag Name=web-01
+ssmm list -p company-prod --output json
+ssmm list -p company-prod --region ap-northeast-1 --output id
 ```
 
 ### JSON のフィールド

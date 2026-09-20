@@ -12,6 +12,7 @@ import (
 type ProfileSource string
 
 const (
+	ProfileConfig  ProfileSource = "config"
 	ProfileFlag    ProfileSource = "flag"
 	ProfileHost    ProfileSource = "host"
 	ProfileEnv     ProfileSource = "env"
@@ -31,7 +32,7 @@ func (p ProfileSelection) Validate() error {
 		return err
 	}
 	switch p.Source {
-	case ProfileFlag, ProfileHost, ProfileEnv, ProfileDefault:
+	case ProfileConfig, ProfileFlag, ProfileHost, ProfileEnv, ProfileDefault:
 	default:
 		return fmt.Errorf("invalid profile source %q", p.Source)
 	}
