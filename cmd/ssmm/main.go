@@ -18,6 +18,8 @@ import (
 	"github.com/uncho/ssmm/internal/target"
 )
 
+var version = "dev"
+
 type awsFactory struct{ factory awsconfig.Factory }
 
 func (f awsFactory) Open(ctx context.Context, selection target.ProfileSelection) (app.AWSRuntime, error) {
@@ -63,6 +65,7 @@ func main() {
 	runner := process.NewRunner()
 	service := app.Service{Settings: store, Profiles: awsconfig.ProfileChecker{}, AWS: awsFactory{factory: awsconfig.Factory{}}, Session: sessionPlanner{aws: executablePath("aws")}, SSH: sshPlanner{}, Runner: runner}
 	command := cli.New(cli.Dependencies{Service: service, Store: store, Profiles: awsconfig.ProfileChecker{}, Runner: runner, SSMMExecutable: ssmmPath, Input: os.Stdin, Output: os.Stdout, Error: os.Stderr})
+	command.Version = version
 	if err := command.Execute(); err != nil {
 		code := 1
 		var exitErr *cli.ExitError

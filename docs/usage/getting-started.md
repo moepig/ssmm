@@ -18,7 +18,13 @@
 
 `scp` の転送方式とオプションの詳細は、[OpenSSH の scp マニュアル](https://man.openbsd.org/scp.1) を参照。
 
-## ビルド
+## リリースバイナリの導入
+
+[GitHub Releases](https://github.com/moepig/ssmm/releases) から OS とアーキテクチャに合う `ssmm_<version>_<os>_<arch>` と `checksums.txt` を取得する。OS 名は Linux が `linux`、macOS が `darwin` である。アーキテクチャは `amd64` と `arm64` を配布する。
+
+ダウンロードしたバイナリの SHA-256 を `checksums.txt` の対応する行と照合する。Linux では `sha256sum <ファイル名>`、macOS では `shasum -a 256 <ファイル名>` で計算できる。照合後、バイナリを `ssmm` に改名し、`chmod +x ssmm` で実行権限を付けて `PATH` の通ったディレクトリへ配置する。`ssmm --version` でバージョンを確認できる。
+
+## ソースからのビルド
 
 リポジトリのルートで、次のコマンドを実行する。
 

@@ -1,6 +1,6 @@
 # 開発ガイド
 
-本ドキュメントは、ssmm のビルドとテスト、内部構成と仕様の参照先、設計記録の位置付けを説明する。
+本ドキュメントは、ssmm のビルドとテスト、リリース手順、内部構成と仕様の参照先、設計記録の位置付けを説明する。
 
 ## 開発環境
 
@@ -22,6 +22,28 @@ go test -race ./...
 ```
 
 単体テストは実 AWS の認証情報を前提としない。プロセス管理のテストではローカルの子プロセスを起動する。Linux では疑似端末を使うテストもある。
+
+## リリース
+
+`v*` タグを push すると、GitHub Actions で GoReleaser v2 を実行する。`go test ./...` の成功後、Linux と macOS の amd64・arm64 向けバイナリをビルドし、GitHub Releases に公開する。プレリリースのバージョンは GitHub Releases でもプレリリースとして扱う。
+
+配布物は `ssmm_<version>_<os>_<arch>` という名前のバイナリと SHA-256 の `checksums.txt` である。macOS の OS 名は `darwin` となる。バイナリにはリリースバージョンを埋め込み、`ssmm --version` で表示する。公開には workflow の `GITHUB_TOKEN` を使う。
+
+GoReleaser v2 を用意し、リポジトリのルートで次のコマンドを実行すると、設定と公開前のビルドを確認できる。snapshot は `dist/` に生成され、GitHub Releases には公開されない。
+
+```sh
+goreleaser check
+goreleaser release --snapshot --clean --parallelism 1
+```
+
+リリース対象のコミットに SemVer のタグを付け、そのタグを push する。`v0.1.0` を公開する場合のコマンドを、以下に示す。
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+設定の詳細は、[GoReleaser 設定](../../.goreleaser.yaml) と [Release workflow](../../.github/workflows/release.yaml) を参照。
 
 ## ドキュメント構成
 
