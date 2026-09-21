@@ -13,7 +13,6 @@ type Host struct {
 	Profile string
 }
 
-var labelRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 var regionRE = regexp.MustCompile(`^[a-z]{2}(?:-[a-z]+)+-\d+$`)
 
 func ParseHost(host string) (Host, error) {
@@ -25,17 +24,17 @@ func ParseHost(host string) (Host, error) {
 	if idx <= 0 || idx == len(body)-1 {
 		return Host{}, fmt.Errorf("invalid ssmm host %q", host)
 	}
-	target, profile := body[:idx], body[idx+1:]
-	if !labelRE.MatchString(profile) {
-		return Host{}, fmt.Errorf("invalid profile label %q", profile)
+	targetName, profile := body[:idx], body[idx+1:]
+	if err := target.ValidateSSHLabel(profile); err != nil {
+		return Host{}, err
 	}
-	parts := strings.Split(target, ".")
+	parts := strings.Split(targetName, ".")
 	for _, part := range parts {
-		if !labelRE.MatchString(part) {
+		if err := target.ValidateSSHLabel(part); err != nil {
 			return Host{}, fmt.Errorf("invalid target label %q", part)
 		}
 	}
-	return Host{Target: target, Profile: profile}, nil
+	return Host{Target: targetName, Profile: profile}, nil
 }
 
 type InternalRequest struct {

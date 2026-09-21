@@ -38,7 +38,7 @@ func (f *fakeSource) SSM(_ context.Context, region string, callback func([]SSMRe
 func TestCollectSeparatesEC2FailureAndSSMStatus(t *testing.T) {
 	name := "web"
 	source := &fakeSource{ec2: map[string][][]target.Instance{"good": {{{Key: target.InstanceKey{Region: "good", InstanceID: "i-01234567"}, Name: &name, EC2State: "running"}}}, "bad": {{{Key: target.InstanceKey{Region: "bad", InstanceID: "i-01234568"}, EC2State: "running"}}}}, ssm: map[string][][]SSMRecord{"good": {{{InstanceID: "i-01234567", Status: target.SSMOnline}}}, "bad": nil}, ec2Err: map[string]error{"bad": errors.New("unavailable")}, ssmErr: map[string]error{}}
-	snapshot, err := Collect(context.Background(), 4, SearchScope{DiscoveryRegion: "good", Regions: []string{"good", "bad"}}, target.TargetQuery{Kind: target.QueryAll}, source)
+	snapshot, err := Collect(context.Background(), 4, SearchScope{Regions: []string{"good", "bad"}}, target.TargetQuery{Kind: target.QueryAll}, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +50,20 @@ func TestCollectSeparatesEC2FailureAndSSMStatus(t *testing.T) {
 	}
 	if len(snapshot.Instances) != 2 {
 		t.Fatalf("expected rows from both EC2 pages, got %d", len(snapshot.Instances))
+	}
+}
+
+func TestStartRejectsInvalidRegionLists(t *testing.T) {
+	for name, regions := range map[string][]string{
+		"empty":      nil,
+		"empty item": {""},
+		"duplicate":  {"us-east-1", "us-east-1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Start(context.Background(), 1, SearchScope{Regions: regions}, target.TargetQuery{Kind: target.QueryAll}, &fakeSource{}); err == nil {
+				t.Fatal("invalid search scope was accepted")
+			}
+		})
 	}
 }
 
@@ -65,7 +79,7 @@ func (blockingSource) SSM(ctx context.Context, _ string, _ func([]SSMRecord) err
 }
 
 func TestStartPublishesRunningSnapshotBeforeFetchCompletes(t *testing.T) {
-	run, err := Start(context.Background(), 9, SearchScope{DiscoveryRegion: "us-east-1", Regions: []string{"us-east-1"}}, target.TargetQuery{Kind: target.QueryAll}, blockingSource{})
+	run, err := Start(context.Background(), 9, SearchScope{Regions: []string{"us-east-1"}}, target.TargetQuery{Kind: target.QueryAll}, blockingSource{})
 	if err != nil {
 		t.Fatal(err)
 	}

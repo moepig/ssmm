@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/uncho/ssmm/internal/app"
 	"github.com/uncho/ssmm/internal/inventory"
 	"github.com/uncho/ssmm/internal/render"
 	"github.com/uncho/ssmm/internal/target"
@@ -28,16 +27,13 @@ type selectModel struct {
 	ctx       context.Context
 	snapshot  inventory.InventorySnapshot
 	filter    string
-	index     int
+	focus     *target.InstanceKey
 	width     int
-	selected  *target.InstanceKey
 	snapshots <-chan inventory.InventorySnapshot
 	input     io.Reader
 	output    io.Writer
 	done      chan SelectResult
 }
-
-type viewMessage app.SelectionView
 
 func Select(ctx context.Context, input *os.File, output io.Writer, snapshot inventory.InventorySnapshot, filter string) (SelectResult, error) {
 	snapshots := make(chan inventory.InventorySnapshot, 1)
@@ -49,7 +45,7 @@ func Select(ctx context.Context, input *os.File, output io.Writer, snapshot inve
 // SelectLive displays snapshots as the inventory aggregator publishes them.
 // It returns Refresh for Ctrl+R so the caller can finish the current
 // generation before starting the next one.
-func SelectLive(ctx context.Context, input *os.File, output io.Writer, snapshots <-chan inventory.InventorySnapshot, filter string, selected *target.InstanceKey) (SelectResult, error) {
+func SelectLive(ctx context.Context, input *os.File, output io.Writer, snapshots <-chan inventory.InventorySnapshot, filter string, focus *target.InstanceKey) (SelectResult, error) {
 	if input == nil {
 		return SelectResult{}, fmt.Errorf("selection terminal is nil")
 	}
@@ -58,7 +54,12 @@ func SelectLive(ctx context.Context, input *os.File, output io.Writer, snapshots
 	}
 	done := make(chan SelectResult, 1)
 	programDone := make(chan struct{})
-	m := selectModel{ctx: ctx, filter: filter, selected: selected, snapshots: snapshots, input: input, output: output, done: done}
+	var initialFocus *target.InstanceKey
+	if focus != nil {
+		key := *focus
+		initialFocus = &key
+	}
+	m := selectModel{ctx: ctx, filter: filter, focus: initialFocus, snapshots: snapshots, input: input, output: output, done: done}
 	p := tea.NewProgram(m, tea.WithInput(input), tea.WithOutput(output))
 	go func() {
 		select {
@@ -67,9 +68,13 @@ func SelectLive(ctx context.Context, input *os.File, output io.Writer, snapshots
 		case <-programDone:
 		}
 	}()
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		close(programDone)
 		return SelectResult{}, err
+	}
+	if current, ok := finalModel.(selectModel); ok {
+		m = current
 	}
 	close(programDone)
 	select {
@@ -108,13 +113,11 @@ func (m selectModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if snapshot, ok := message.(snapshotMessage); ok {
 		m.snapshot = inventory.InventorySnapshot(snapshot).Clone()
-		if m.selected != nil {
+		if m.focus == nil {
 			rows := target.Filter(m.snapshot.Instances, m.filter)
-			for i, row := range rows {
-				if row.Key == *m.selected {
-					m.index = i
-					break
-				}
+			if len(rows) > 0 {
+				key := rows[0].Key
+				m.focus = &key
 			}
 		}
 		return m, nextSnapshot(m.snapshots)
@@ -130,48 +133,36 @@ func (m selectModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case tea.KeyEnter:
 			rows := target.Filter(m.snapshot.Instances, m.filter)
-			if len(rows) == 0 {
+			row, ok := focusedRow(rows, m.focus)
+			if !ok {
 				return m, nil
 			}
-			if m.index >= len(rows) {
-				m.index = len(rows) - 1
-			}
-			key := rows[m.index].Key
-			m.selected = &key
-			if !rows[m.index].Running() {
+			if !row.Running() {
 				return m, nil
 			}
-			m.done <- SelectResult{Key: key, HasKey: true, Filter: m.filter, Generation: m.snapshot.Generation, Snapshot: m.snapshot.Clone()}
+			m.done <- SelectResult{Key: row.Key, HasKey: true, Filter: m.filter, Generation: m.snapshot.Generation, Snapshot: m.snapshot.Clone()}
 			return m, tea.Quit
 		case tea.KeyUp:
-			if m.index > 0 {
-				m.index--
-			}
+			m.moveFocus(-1)
 			return m, nil
 		case tea.KeyDown:
-			rows := target.Filter(m.snapshot.Instances, m.filter)
-			if m.index+1 < len(rows) {
-				m.index++
-			}
+			m.moveFocus(1)
 			return m, nil
 		case tea.KeyBackspace:
 			if len(m.filter) > 0 {
 				m.filter = m.filter[:len(m.filter)-1]
-				m.index = 0
+				m.resetFocus()
 			}
 			return m, nil
 		case tea.KeyRunes:
 			m.filter += string(key.Runes)
-			m.index = 0
+			m.resetFocus()
 			return m, nil
 		case tea.KeyCtrlR:
 			result := SelectResult{Refresh: true, Filter: m.filter, Generation: m.snapshot.Generation, Snapshot: m.snapshot.Clone()}
-			if m.index >= 0 {
-				rows := target.Filter(m.snapshot.Instances, m.filter)
-				if m.index < len(rows) {
-					result.Key = rows[m.index].Key
-					result.HasKey = true
-				}
+			if m.focus != nil {
+				result.Key = *m.focus
+				result.HasKey = true
 			}
 			m.done <- result
 			return m, tea.Quit
@@ -186,9 +177,9 @@ func (m selectModel) View() string {
 	b.WriteString(render.Line(m.width, 0, "Profile selection") + "\n")
 	b.WriteString(render.Line(m.width, 0, "Filter: "+m.filter) + "\n\n")
 	table := render.Table{Gap: 3, Width: m.width}
-	for i, row := range rows {
+	for _, row := range rows {
 		marker := ""
-		if i == m.index {
+		if m.focus != nil && row.Key == *m.focus {
 			marker = ">"
 		}
 		name := "-"
@@ -206,26 +197,64 @@ func (m selectModel) View() string {
 	return b.String()
 }
 
-var _ app.SelectionUI = (*SelectionAdapter)(nil)
-
-type SelectionAdapter struct {
-	Input  *os.File
-	Output io.Writer
+func focusedRow(rows []target.Instance, focus *target.InstanceKey) (target.Instance, bool) {
+	if focus == nil {
+		return target.Instance{}, false
+	}
+	for _, row := range rows {
+		if row.Key == *focus {
+			return row, true
+		}
+	}
+	return target.Instance{}, false
 }
 
-func (a SelectionAdapter) Run(ctx context.Context, views <-chan app.SelectionView, actions chan<- app.SelectionAction) error {
-	view, ok := <-views
-	if !ok {
-		return nil
+func (m *selectModel) resetFocus() {
+	rows := target.Filter(m.snapshot.Instances, m.filter)
+	if len(rows) == 0 {
+		m.focus = nil
+		return
 	}
-	result, err := Select(ctx, a.Input, a.Output, view.Snapshot, view.Filter)
-	if err != nil {
-		return err
+	key := rows[0].Key
+	m.focus = &key
+}
+
+func (m *selectModel) moveFocus(step int) {
+	rows := target.Filter(m.snapshot.Instances, m.filter)
+	if len(rows) == 0 {
+		m.focus = nil
+		return
 	}
-	if result.Canceled {
-		actions <- app.SelectionAction{Kind: app.Cancel}
-		return nil
+	if m.focus == nil {
+		key := rows[0].Key
+		if step < 0 {
+			key = rows[len(rows)-1].Key
+		}
+		m.focus = &key
+		return
 	}
-	actions <- app.SelectionAction{Kind: app.Select, Generation: view.Snapshot.Generation, Key: result.Key, Filter: result.Filter}
-	return nil
+	position := -1
+	for i, row := range rows {
+		if row.Key == *m.focus {
+			position = i
+			break
+		}
+	}
+	if position < 0 {
+		key := rows[0].Key
+		if step < 0 {
+			key = rows[len(rows)-1].Key
+		}
+		m.focus = &key
+		return
+	}
+	next := position + step
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(rows) {
+		next = len(rows) - 1
+	}
+	key := rows[next].Key
+	m.focus = &key
 }

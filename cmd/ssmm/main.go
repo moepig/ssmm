@@ -35,19 +35,10 @@ func (p sessionPlanner) PlanSession(request app.SessionRequest) (execplan.Proces
 type sshPlanner struct{}
 
 func (sshPlanner) PlanSSH(request app.SSHRequest) (execplan.ProcessSpec, error) {
-	return openssh.PlanSSH(openssh.SSHRequest{Target: request.Target, Options: openssh.SSHOptions{User: request.Options.User, IdentityFile: request.Options.IdentityFile, Port: request.Options.Port}, Executable: request.Executable, Ssmm: request.SsmmExecutable, ExtraArgs: request.ExtraArgs})
+	return openssh.Planner{}.PlanSSH(request)
 }
 func (sshPlanner) PlanSCP(request app.SCPRequest) (execplan.ProcessSpec, error) {
-	transfer := openssh.Transfer{User: request.Transfer.User, Target: request.Transfer.Target, Local: append([]string(nil), request.Transfer.Local...)}
-	if request.Transfer.Direction == app.SCPSend {
-		transfer.Direction = openssh.Send
-	} else {
-		transfer.Direction = openssh.Receive
-	}
-	for _, remote := range request.Transfer.Remote {
-		transfer.Remote = append(transfer.Remote, openssh.Endpoint{User: remote.User, Target: remote.Target, Path: remote.Path})
-	}
-	return openssh.PlanSCP(openssh.SCPRequest{Target: request.Target, Options: openssh.SSHOptions{User: request.Options.User, IdentityFile: request.Options.IdentityFile, Port: request.Options.Port}, Executable: request.Executable, Ssmm: request.SsmmExecutable, Transfer: transfer, Recursive: request.Recursive})
+	return openssh.Planner{}.PlanSCP(request)
 }
 
 func main() {

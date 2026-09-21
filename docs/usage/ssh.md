@@ -41,6 +41,8 @@ ssmm が OpenSSH へ渡す設定値の決定順序を、以下にまとめる。
 
 `USER@TARGET` と `--user` を併用する場合は同じ値にする。異なる値はエラーになる。ユーザー名は AMI から自動判定しない。
 
+SSH ユーザー名に制御文字、空白類、先頭の `-`、`@`、`:`、`/`、バックスラッシュがある場合は接続前に拒否する。鍵ファイルのパスに空白や引用符、バックスラッシュ、`#`、`%` がある場合は OpenSSH の設定構文へ変換する。`${`、制御文字を含むパスは使用できない。
+
 ssmm のラッパーが作るトンネルの既定ポートは 22 である。別ポートを使う場合は `--port` または `ssh.port` に明示する。標準 SSH 連携では OpenSSH が決定したポートを proxy へ渡す。
 
 既存の OpenSSH 設定も読み込まれる。`--identity-file` は ssmm が追加する鍵の指定であり、ほかの `IdentityFile` や ssh-agent の鍵を除去する操作ではない。
@@ -97,6 +99,8 @@ ssh web-01.prod.ssmm uname -a
 生成設定は `~/.ssh/ssmm/config` に保存され、`~/.ssh/config` の `Include` から読み込まれる。`ProxyCommand` が `ssmm proxy` を起動するため、これらのホスト名を DNS に登録する必要はない。
 
 `ssh-config create` と `ssh-config delete` は `--ssmm-profile` / `-s` で保存先を選択し、未指定時は `default` を使う。対話入力や AWS API の呼び出しは行わない。`create` を再実行すると保存済みの設定から再生成する。
+
+保存済みの SSH 既定値や `ssmm` の実行ファイルパスを変更した場合は、`ssh-config create` を再実行して管理対象ファイルを再生成する。生成された設定は、設定値を OpenSSH の引用構文へ変換して出力する。
 
 名前解決は常に非対話であり、全検索範囲の EC2 取得が成功し、候補が 1 件で `running` の場合だけ接続する。Name が重複する場合は、プロファイルのリージョンを限定するかインスタンス ID を使う。
 

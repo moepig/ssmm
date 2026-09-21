@@ -61,11 +61,14 @@ func (c *CLI) initCommand() *cobra.Command {
 		if c.deps.Store == nil {
 			return fmt.Errorf("settings store is unavailable")
 		}
+		name := c.ssmmProfile(cmd).Name
+		if err := target.ValidateSSMMProfileName(name); err != nil {
+			return exitError(2, "%v", err)
+		}
 		draft, err := c.deps.Store.ReadForUpdate(cmd.Context(), false)
 		if err != nil {
 			return err
 		}
-		name := c.ssmmProfile(cmd).Name
 		profile := draft.Snapshot.Profiles[name]
 		if !cmd.Flags().Changed("regions") && !cmd.Flags().Changed("all-regions") && !cmd.Flags().Changed("user") && !cmd.Flags().Changed("identity-file") && !cmd.Flags().Changed("port") && !cmd.Flags().Changed("profile") && !cmd.Flags().Changed("region") && terminal.Available() {
 			if err := c.editInitInteractively(&profile, ssh); err != nil {
@@ -262,19 +265,9 @@ func (c *CLI) runSSH(cmd *cobra.Command, args []string) error {
 	}
 	resolved := result.Target
 	profile := result.Settings.Profile(result.Profile.Name)
-	identity, _ := cmd.Flags().GetString("identity-file")
-	if identity != "" {
-		cwd, _ := os.Getwd()
-		identity, err = config.ExpandFlagPath(identity, cwd)
-		if err != nil {
-			return exitError(2, "%v", err)
-		}
-	} else {
-		identity = profile.SSH.IdentityFile
-	}
-	port, _ := cmd.Flags().GetInt("port")
-	if port == 0 {
-		port = profile.SSH.Port
+	options, err := c.sshOptions(cmd, userOr(user, profile.SSH.User), profile)
+	if err != nil {
+		return exitError(2, "%v", err)
 	}
 	if err := session.CheckDependencies(); err != nil {
 		return err
@@ -282,7 +275,7 @@ func (c *CLI) runSSH(cmd *cobra.Command, args []string) error {
 	if c.deps.Service.SSH == nil || c.deps.Runner == nil {
 		return fmt.Errorf("SSH dependencies are incomplete")
 	}
-	spec, err := c.deps.Service.SSH.PlanSSH(app.SSHRequest{Target: resolved, Options: app.SSHOptions{User: userOr(user, profile.SSH.User), IdentityFile: identity, Port: port}, Executable: c.deps.SSHExecutable, SsmmExecutable: c.deps.SSMMExecutable})
+	spec, err := c.deps.Service.SSH.PlanSSH(app.SSHRequest{Target: resolved, Options: options, Executable: c.deps.SSHExecutable, SsmmExecutable: c.deps.SSMMExecutable})
 	if err != nil {
 		return err
 	}
@@ -309,19 +302,9 @@ func (c *CLI) runSCP(cmd *cobra.Command, args []string) error {
 		}
 		user = transfer.User
 	}
-	identity, _ := cmd.Flags().GetString("identity-file")
-	if identity != "" {
-		cwd, _ := os.Getwd()
-		identity, err = config.ExpandFlagPath(identity, cwd)
-		if err != nil {
-			return exitError(2, "%v", err)
-		}
-	} else {
-		identity = profile.SSH.IdentityFile
-	}
-	port, _ := cmd.Flags().GetInt("port")
-	if port == 0 {
-		port = profile.SSH.Port
+	options, err := c.sshOptions(cmd, userOr(user, profile.SSH.User), profile)
+	if err != nil {
+		return exitError(2, "%v", err)
 	}
 	recursive, _ := cmd.Flags().GetBool("recursive")
 	if err := session.CheckDependencies(); err != nil {
@@ -330,7 +313,7 @@ func (c *CLI) runSCP(cmd *cobra.Command, args []string) error {
 	if c.deps.Service.SSH == nil || c.deps.Runner == nil {
 		return fmt.Errorf("SCP dependencies are incomplete")
 	}
-	spec, err := c.deps.Service.SSH.PlanSCP(app.SCPRequest{Target: resolved, Options: app.SSHOptions{User: userOr(user, profile.SSH.User), IdentityFile: identity, Port: port}, Executable: c.deps.SCPExecutable, SsmmExecutable: c.deps.SSMMExecutable, Transfer: appTransfer(transfer), Recursive: recursive})
+	spec, err := c.deps.Service.SSH.PlanSCP(app.SCPRequest{Target: resolved, Options: options, Executable: c.deps.SCPExecutable, SsmmExecutable: c.deps.SSMMExecutable, Transfer: transfer, Recursive: recursive})
 	if err != nil {
 		return err
 	}
@@ -443,15 +426,33 @@ func userOr(value, fallback string) string {
 	return fallback
 }
 
-func appTransfer(transfer openssh.Transfer) app.SCPTransfer {
-	converted := app.SCPTransfer{User: transfer.User, Target: transfer.Target, Local: append([]string(nil), transfer.Local...)}
-	if transfer.Direction == openssh.Send {
-		converted.Direction = app.SCPSend
+func (c *CLI) sshOptions(cmd *cobra.Command, user string, profile app.ProfileSettings) (app.SSHOptions, error) {
+	identity, err := cmd.Flags().GetString("identity-file")
+	if err != nil {
+		return app.SSHOptions{}, err
+	}
+	if identity != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return app.SSHOptions{}, err
+		}
+		identity, err = config.ExpandFlagPath(identity, cwd)
+		if err != nil {
+			return app.SSHOptions{}, err
+		}
 	} else {
-		converted.Direction = app.SCPReceive
+		identity = profile.SSH.IdentityFile
 	}
-	for _, remote := range transfer.Remote {
-		converted.Remote = append(converted.Remote, app.SCPRemote{User: remote.User, Target: remote.Target, Path: remote.Path})
+	port, err := cmd.Flags().GetInt("port")
+	if err != nil {
+		return app.SSHOptions{}, err
 	}
-	return converted
+	if port == 0 {
+		port = profile.SSH.Port
+	}
+	options := app.SSHOptions{User: user, IdentityFile: identity, Port: port}
+	if err := options.Validate(); err != nil {
+		return app.SSHOptions{}, err
+	}
+	return options, nil
 }

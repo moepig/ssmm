@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/uncho/ssmm/internal/app"
 	"github.com/uncho/ssmm/internal/target"
 )
 
@@ -58,7 +59,7 @@ func decode(data []byte, configDir string, validate bool) (Settings, error) {
 		settings.Profiles = map[string]Profile{}
 	}
 	for name := range settings.Profiles {
-		if err := ValidateProfileName(name); err != nil {
+		if err := target.ValidateSSMMProfileName(name); err != nil {
 			return Settings{}, err
 		}
 	}
@@ -84,43 +85,6 @@ func ReadLenient(path string) (Settings, error) {
 	return DecodeLenient(data, filepath.Dir(path))
 }
 
-func (s Settings) ValidateProfile(name, configDir string) error {
-	profile, ok := s.Profiles[name]
-	if !ok {
-		return nil
-	}
-	if profile.AWSProfile != "" {
-		if err := target.ValidateProfileName(profile.AWSProfile); err != nil {
-			return fmt.Errorf("profiles.%s.aws_profile: %w", name, err)
-		}
-	}
-	if profile.Regions != nil {
-		if len(*profile.Regions) == 0 {
-			return fmt.Errorf("profiles.%s.regions must not be empty", name)
-		}
-		for _, region := range *profile.Regions {
-			if !IsCommercialRegion(region) {
-				return fmt.Errorf("profiles.%s.regions contains invalid region %q", name, region)
-			}
-		}
-	}
-	if profile.SSH.User != "" && strings.TrimSpace(profile.SSH.User) == "" {
-		return fmt.Errorf("profiles.%s.ssh.user is empty", name)
-	}
-	if profile.SSH.Port != 0 && (profile.SSH.Port < 1 || profile.SSH.Port > 65535) {
-		return fmt.Errorf("profiles.%s.ssh.port is out of range", name)
-	}
-	if strings.Contains(profile.SSH.IdentityFile, "${") {
-		return fmt.Errorf("profiles.%s.ssh.identity_file contains unsupported ${...}", name)
-	}
-	if profile.SSH.IdentityFile != "" {
-		if _, err := ExpandSavedPath(profile.SSH.IdentityFile, configDir); err != nil {
-			return fmt.Errorf("profiles.%s.ssh.identity_file: %w", name, err)
-		}
-	}
-	return nil
-}
-
 func Read(path string) (Settings, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -134,7 +98,7 @@ func Read(path string) (Settings, error) {
 
 func (s Settings) Validate(configDir string) error {
 	for name, profile := range s.Profiles {
-		if err := ValidateProfileName(name); err != nil {
+		if err := target.ValidateSSMMProfileName(name); err != nil {
 			return err
 		}
 		if profile.AWSProfile != "" {
@@ -152,19 +116,13 @@ func (s Settings) Validate(configDir string) error {
 					return fmt.Errorf("profiles.%s.regions contains invalid region %q", name, region)
 				}
 				if _, ok := seen[region]; ok {
-					continue
+					return fmt.Errorf("profiles.%s.regions contains duplicate region %q", name, region)
 				}
 				seen[region] = struct{}{}
 			}
 		}
-		if profile.SSH.User != "" && strings.TrimSpace(profile.SSH.User) == "" {
-			return fmt.Errorf("profiles.%s.ssh.user is empty", name)
-		}
-		if profile.SSH.Port != 0 && (profile.SSH.Port < 1 || profile.SSH.Port > 65535) {
-			return fmt.Errorf("profiles.%s.ssh.port is out of range", name)
-		}
-		if strings.Contains(profile.SSH.IdentityFile, "${") {
-			return fmt.Errorf("profiles.%s.ssh.identity_file contains unsupported ${...}", name)
+		if err := (app.SSHOptions{User: profile.SSH.User, IdentityFile: profile.SSH.IdentityFile, Port: profile.SSH.Port}).Validate(); err != nil {
+			return fmt.Errorf("profiles.%s.ssh: %w", name, err)
 		}
 		if profile.SSH.IdentityFile != "" {
 			if _, err := ExpandSavedPath(profile.SSH.IdentityFile, configDir); err != nil {
@@ -216,37 +174,15 @@ func IsCommercialRegion(region string) bool {
 	return regionRE.MatchString(region) && !strings.HasPrefix(region, "cn-") && !strings.Contains(region, "-gov-")
 }
 
-func ValidateProfileName(name string) error {
-	if name == "" || strings.ContainsAny(name, "\x00\r\n /\\") {
-		return fmt.Errorf("invalid profile name %q", name)
-	}
-	return nil
-}
-
 func ExpandSavedPath(value, configDir string) (string, error) {
-	if value == "" {
-		return "", nil
-	}
-	if strings.ContainsAny(value, "\x00\r\n") {
-		return "", fmt.Errorf("path contains a control character")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	if value == "~" {
-		return home, nil
-	}
-	if strings.HasPrefix(value, "~/") {
-		value = filepath.Join(home, value[2:])
-	}
-	if !filepath.IsAbs(value) {
-		value = filepath.Join(configDir, value)
-	}
-	return filepath.Clean(value), nil
+	return expandPath(value, configDir)
 }
 
 func ExpandFlagPath(value, workingDir string) (string, error) {
+	return expandPath(value, workingDir)
+}
+
+func expandPath(value, baseDir string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
@@ -264,7 +200,7 @@ func ExpandFlagPath(value, workingDir string) (string, error) {
 		value = filepath.Join(home, value[2:])
 	}
 	if !filepath.IsAbs(value) {
-		value = filepath.Join(workingDir, value)
+		value = filepath.Join(baseDir, value)
 	}
 	return filepath.Clean(value), nil
 }

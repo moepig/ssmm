@@ -146,6 +146,51 @@ func TestAppStoreCommitReportsPartialWriteFailure(t *testing.T) {
 	}
 }
 
+func TestReadForUpdateUsesOneConfigStateForDraftAndConflictCheck(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{ConfigFile: filepath.Join(root, "config.toml"), LockFile: filepath.Join(root, "lock")}
+	store := NewAppStore(paths, "/usr/local/bin/ssmm")
+	old := []byte("[profiles.old]\n")
+	newData := []byte("[profiles.new]\n")
+	if err := os.WriteFile(paths.ConfigFile, old, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed := false
+	readState := func(path string) (app.FileState, error) {
+		state, err := readFileState(path)
+		if err != nil {
+			return app.FileState{}, err
+		}
+		if path == paths.ConfigFile && !changed {
+			changed = true
+			if err := os.WriteFile(path, newData, 0o600); err != nil {
+				return app.FileState{}, err
+			}
+		}
+		return state, nil
+	}
+	draft, err := store.readForUpdate(context.Background(), false, readState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := draft.Snapshot.Profiles["old"]; !ok {
+		t.Fatalf("draft was not decoded from the original state: %#v", draft.Snapshot.Profiles)
+	}
+	if string(draft.Original[paths.ConfigFile].Data) != string(old) {
+		t.Fatalf("original state = %q, want %q", draft.Original[paths.ConfigFile].Data, old)
+	}
+	if _, err := store.Commit(context.Background(), app.SettingsUpdate{Snapshot: draft.Snapshot, Original: draft.Original}); err == nil {
+		t.Fatal("commit accepted a changed config")
+	}
+	got, err := os.ReadFile(paths.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(newData) {
+		t.Fatalf("changed config was overwritten: %q", got)
+	}
+}
+
 func readFiles(t *testing.T, paths Paths) map[string][]byte {
 	t.Helper()
 	out := map[string][]byte{}

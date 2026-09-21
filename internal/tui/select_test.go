@@ -59,3 +59,47 @@ func TestSelectModelConsumesIncrementalSnapshotsAndRequestsRefresh(t *testing.T)
 		t.Fatal("refresh action was not emitted")
 	}
 }
+
+func TestSelectModelKeepsFocusedKeyWhenRowsAreInserted(t *testing.T) {
+	focus := target.InstanceKey{Region: "us-east-1", InstanceID: "i-c"}
+	done := make(chan SelectResult, 1)
+	m := selectModel{focus: &focus, done: done}
+	updated, _ := m.Update(snapshotMessage(inventory.InventorySnapshot{Generation: 4, Instances: []target.Instance{
+		{Key: target.InstanceKey{Region: "us-east-1", InstanceID: "i-a"}, EC2State: "running"},
+		{Key: target.InstanceKey{Region: "us-east-1", InstanceID: "i-b"}, EC2State: "running"},
+		{Key: focus, EC2State: "running"},
+	}}))
+	m = updated.(selectModel)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_ = updated
+	select {
+	case result := <-done:
+		if !result.HasKey || result.Key != focus {
+			t.Fatalf("selected key = %#v, want %v", result, focus)
+		}
+	default:
+		t.Fatal("Enter did not select the focused key")
+	}
+}
+
+func TestSelectModelRetainsMissingFocusForRefresh(t *testing.T) {
+	focus := target.InstanceKey{Region: "us-east-1", InstanceID: "i-c"}
+	done := make(chan SelectResult, 1)
+	m := selectModel{focus: &focus, done: done}
+	updated, _ := m.Update(snapshotMessage(inventory.InventorySnapshot{Generation: 5, Instances: []target.Instance{
+		{Key: target.InstanceKey{Region: "us-east-1", InstanceID: "i-a"}, EC2State: "running"},
+	}}))
+	m = updated.(selectModel)
+	if strings.Contains(m.View(), ">") {
+		t.Fatal("missing focus was displayed as a selected row")
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	select {
+	case result := <-done:
+		if !result.Refresh || !result.HasKey || result.Key != focus {
+			t.Fatalf("refresh did not retain missing focus: %#v", result)
+		}
+	default:
+		t.Fatal("refresh action was not emitted")
+	}
+}

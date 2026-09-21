@@ -43,6 +43,7 @@ func (p ProfileSelection) Validate() error {
 }
 
 var profileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@+-]*$`)
+var sshLabelRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 func ValidateProfileName(name string) error {
 	if name == "" || !profileNameRE.MatchString(name) {
@@ -50,6 +51,20 @@ func ValidateProfileName(name string) error {
 	}
 	if strings.ContainsAny(name, "\x00\r\n") {
 		return fmt.Errorf("profile name contains a control character")
+	}
+	return nil
+}
+
+func ValidateSSMMProfileName(name string) error {
+	if name == "" || !profileNameRE.MatchString(name) {
+		return fmt.Errorf("invalid ssmm profile name %q; expected ^[A-Za-z0-9][A-Za-z0-9_.@+-]*$", name)
+	}
+	return nil
+}
+
+func ValidateSSHLabel(label string) error {
+	if !sshLabelRE.MatchString(label) {
+		return fmt.Errorf("invalid SSH profile label %q; expected 1-63 lowercase letters, digits, or hyphens with alphanumeric boundaries", label)
 	}
 	return nil
 }

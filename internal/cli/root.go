@@ -70,15 +70,6 @@ func (c *CLI) awsProfile(cmd *cobra.Command) target.ProfileSelection {
 	return awsconfig.SelectionFromFlags(value, cmd.Flags().Changed("profile"))
 }
 
-func (c *CLI) common(cmd *cobra.Command, targetName string, nonInteractive bool) (app.SearchResult, error) {
-	req, err := c.searchRequest(cmd, targetName)
-	if err != nil {
-		return app.SearchResult{}, err
-	}
-	req.NonInteractive = nonInteractive
-	return c.deps.Service.Search(cmd.Context(), req)
-}
-
 func (c *CLI) searchRequest(cmd *cobra.Command, targetName string) (app.SearchRequest, error) {
 	region, _ := cmd.Flags().GetString("region")
 	filter, _ := cmd.Flags().GetString("filter")
@@ -193,7 +184,6 @@ func (c *CLI) runInventory(cmd *cobra.Command, name string, nonInteractive bool)
 	if err != nil {
 		return app.SearchResult{}, exitError(2, "%v", err)
 	}
-	req.NonInteractive = nonInteractive
 	settings, scope, snapshot, q, err := c.deps.Service.Inventory(cmd.Context(), req)
 	if err != nil {
 		return app.SearchResult{}, err

@@ -28,23 +28,47 @@ func (s AppStore) Read(context.Context) (app.SettingsSnapshot, error) {
 }
 
 func (s AppStore) ReadForUpdate(ctx context.Context, updateSSH bool) (app.SettingsDraft, error) {
-	snapshot, err := s.Read(ctx)
+	return s.readForUpdate(ctx, updateSSH)
+}
+
+func (s AppStore) readForUpdate(ctx context.Context, updateSSH bool, readers ...func(string) (app.FileState, error)) (app.SettingsDraft, error) {
+	if err := ctx.Err(); err != nil {
+		return app.SettingsDraft{}, err
+	}
+	readState := readFileState
+	if len(readers) > 0 && readers[0] != nil {
+		readState = readers[0]
+	}
+	configState, err := readState(s.Paths.ConfigFile)
 	if err != nil {
 		return app.SettingsDraft{}, err
 	}
-	original := map[string]app.FileState{}
-	paths := []string{s.Paths.ConfigFile}
-	if updateSSH {
-		paths = append(paths, s.Paths.SSHManagedFile, s.Paths.SSHConfigFile)
+	snapshot, err := snapshotFromState(configState)
+	if err != nil {
+		return app.SettingsDraft{}, err
 	}
-	for _, path := range paths {
-		state, err := readFileState(path)
-		if err != nil {
-			return app.SettingsDraft{}, err
+	original := map[string]app.FileState{s.Paths.ConfigFile: configState}
+	if updateSSH {
+		for _, path := range []string{s.Paths.SSHManagedFile, s.Paths.SSHConfigFile} {
+			state, err := readState(path)
+			if err != nil {
+				return app.SettingsDraft{}, err
+			}
+			original[path] = state
 		}
-		original[path] = state
 	}
 	return app.SettingsDraft{Snapshot: snapshot, Original: original, UpdateSSH: updateSSH}, nil
+}
+
+func snapshotFromState(state app.FileState) (app.SettingsSnapshot, error) {
+	if !state.Exists {
+		return app.SettingsSnapshot{ConfigPath: state.Path, ConfigDir: filepath.Dir(state.Path), Profiles: map[string]app.ProfileSettings{}}, nil
+	}
+	settings, err := DecodeLenient(state.Data, filepath.Dir(state.Path))
+	if err != nil {
+		return app.SettingsSnapshot{}, err
+	}
+	return toSnapshot(settings, state.Path), nil
 }
 
 func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.SaveReport, error) {
@@ -56,6 +80,15 @@ func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.Sa
 		return app.SaveReport{}, err
 	}
 	defer unlock()
+	required := []string{s.Paths.ConfigFile}
+	if update.UpdateSSH {
+		required = append(required, s.Paths.SSHManagedFile, s.Paths.SSHConfigFile)
+	}
+	for _, path := range required {
+		if _, ok := update.Original[path]; !ok {
+			return app.SaveReport{}, fmt.Errorf("original file state is missing: %s", path)
+		}
+	}
 	for path, expected := range update.Original {
 		current, err := readFileState(path)
 		if err != nil {
@@ -83,10 +116,8 @@ func (s AppStore) Commit(ctx context.Context, update app.SettingsUpdate) (app.Sa
 		if err != nil {
 			return app.SaveReport{}, fmt.Errorf("generate %s: %w", s.Paths.SSHManagedFile, err)
 		}
-		existing, err := os.ReadFile(s.Paths.SSHConfigFile)
-		if err != nil && !os.IsNotExist(err) {
-			return app.SaveReport{}, err
-		}
+		existingState := update.Original[s.Paths.SSHConfigFile]
+		existing := existingState.Data
 		integration := false
 		for _, profile := range update.Snapshot.Profiles {
 			if profile.Integration {

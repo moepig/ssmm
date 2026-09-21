@@ -1,6 +1,12 @@
 package app
 
-import "github.com/uncho/ssmm/internal/target"
+import (
+	"fmt"
+	"strings"
+	"unicode"
+
+	"github.com/uncho/ssmm/internal/target"
+)
 
 type SettingsSnapshot struct {
 	ConfigPath string
@@ -20,6 +26,33 @@ type SSHOptions struct {
 	User         string
 	IdentityFile string
 	Port         int
+}
+
+func (o SSHOptions) Validate() error {
+	if o.User != "" {
+		if o.User[0] == '-' {
+			return fmt.Errorf("SSH user %q must not start with '-'", o.User)
+		}
+		for _, r := range o.User {
+			if unicode.IsControl(r) || unicode.IsSpace(r) || strings.ContainsRune("@:/\\", r) {
+				return fmt.Errorf("SSH user %q contains an invalid character", o.User)
+			}
+		}
+	}
+	if o.IdentityFile != "" {
+		for _, r := range o.IdentityFile {
+			if unicode.IsControl(r) {
+				return fmt.Errorf("identity file %q contains a control character", o.IdentityFile)
+			}
+		}
+		if strings.Contains(o.IdentityFile, "${") {
+			return fmt.Errorf("identity file %q contains unsupported ${...}", o.IdentityFile)
+		}
+	}
+	if o.Port < 0 || o.Port > 65535 {
+		return fmt.Errorf("SSH port %d is out of range", o.Port)
+	}
+	return nil
 }
 
 func (s SettingsSnapshot) Profile(name string) ProfileSettings {

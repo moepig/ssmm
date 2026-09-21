@@ -32,7 +32,7 @@ func ResolveScope(ctx context.Context, runtime AWSRuntime, selection target.Prof
 		configured = []string{regionOverride}
 		source = "--region"
 	} else if profile.Regions != nil {
-		configured = uniqueRegions(*profile.Regions)
+		configured = append([]string(nil), (*profile.Regions)...)
 		source = "profiles." + selection.Name + ".regions"
 		if len(configured) == 0 {
 			return inventory.SearchScope{}, fmt.Errorf("configured region list is empty")
@@ -63,7 +63,7 @@ func ResolveScope(ctx context.Context, runtime AWSRuntime, selection target.Prof
 	if len(configured) == 0 {
 		return inventory.SearchScope{}, fmt.Errorf("account has no enabled regions")
 	}
-	return inventory.SearchScope{DiscoveryRegion: discovery, Regions: configured, Source: source}, nil
+	return inventory.SearchScope{Regions: configured, Source: source}, nil
 }
 
 var regionRE = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d+$`)
@@ -83,30 +83,9 @@ func validateProfileScope(profile ProfileSettings) error {
 			}
 		}
 	}
-	return validateSSHSettings(profile)
+	return profile.SSH.Validate()
 }
 
 func validateSSHSettings(profile ProfileSettings) error {
-	if profile.SSH.User != "" && strings.TrimSpace(profile.SSH.User) == "" {
-		return fmt.Errorf("configured SSH user is empty")
-	}
-	if profile.SSH.Port < 0 || profile.SSH.Port > 65535 {
-		return fmt.Errorf("configured SSH port is out of range")
-	}
-	if strings.Contains(profile.SSH.IdentityFile, "${") {
-		return fmt.Errorf("configured identity file contains unsupported ${...}")
-	}
-	return nil
-}
-
-func uniqueRegions(in []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(in))
-	for _, r := range in {
-		if !seen[r] {
-			seen[r] = true
-			out = append(out, r)
-		}
-	}
-	return out
+	return profile.SSH.Validate()
 }

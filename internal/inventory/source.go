@@ -18,14 +18,13 @@ type Source interface {
 }
 
 type SearchScope struct {
-	DiscoveryRegion string
-	Regions         []string
-	Source          string
+	Regions []string
+	Source  string
 }
 
 func (s SearchScope) Validate() error {
-	if s.DiscoveryRegion == "" || len(s.Regions) == 0 {
-		return fmt.Errorf("search scope must contain a discovery region and at least one region")
+	if len(s.Regions) == 0 {
+		return fmt.Errorf("search scope must contain at least one region")
 	}
 	seen := make(map[string]struct{}, len(s.Regions))
 	for _, r := range s.Regions {

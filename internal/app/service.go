@@ -21,12 +21,11 @@ type SearchRequest struct {
 	// CLI フラグまたは環境変数から選択した AWS プロファイル。明示フラグは保存設定より優先する。
 	AWSProfile target.ProfileSelection
 	// 検索リージョンと SSH の既定値を選択する ssmm プロファイル。
-	Profile        target.ProfileSelection
-	Target         string
-	Tags           []target.TagFilter
-	Filter         string
-	Region         string
-	NonInteractive bool
+	Profile target.ProfileSelection
+	Target  string
+	Tags    []target.TagFilter
+	Filter  string
+	Region  string
 }
 
 type SearchResult struct {
@@ -103,40 +102,21 @@ func (s Service) Inventory(ctx context.Context, req SearchRequest) (SettingsSnap
 	return search.Settings, search.Scope, snapshot, search.Query, nil
 }
 
-func (s Service) Search(ctx context.Context, req SearchRequest) (SearchResult, error) {
-	settings, scope, snapshot, q, err := s.Inventory(ctx, req)
-	if err != nil {
-		return SearchResult{}, err
-	}
-	method := target.ResolvedUnique
-	if req.Target == "" {
-		method = target.ResolvedManual
-	}
-	resolved, err := ResolveSnapshot(settings.AWSSelection(req.Profile.Name, req.AWSProfile), snapshot, q, req.Filter, nil, method)
-	if err != nil {
-		return SearchResult{Profile: req.Profile, AWSProfile: settings.AWSSelection(req.Profile.Name, req.AWSProfile), Settings: settings, Scope: scope, Snapshot: snapshot, Query: q, Filter: req.Filter}, classifyResolveError(err, snapshot, q, req.Filter)
-	}
-	return SearchResult{Profile: req.Profile, AWSProfile: settings.AWSSelection(req.Profile.Name, req.AWSProfile), Settings: settings, Scope: scope, Snapshot: snapshot, Target: resolved, Query: q, Filter: req.Filter}, nil
-}
-
-func classifyResolveError(err error, snapshot inventory.InventorySnapshot, query target.TargetQuery, filter string) error {
-	kind := ErrNoTarget
-	if !snapshot.EC2Complete || !snapshot.Finished {
-		kind = ErrIncomplete
-	}
-	if err != nil && len(Candidates(snapshot, query, filter)) > 1 {
-		kind = ErrAmbiguous
-	}
-	return &AppError{Kind: kind, Operation: "resolve target", Err: err}
-}
-
 // ssmm プロファイルが選択されていない場合は設定を読み込まず、空の設定を返す。
 func (s Service) ReadSettings(ctx context.Context, profile target.ProfileSelection) (SettingsSnapshot, error) {
 	if profile == (target.ProfileSelection{}) {
 		return SettingsSnapshot{}, nil
 	}
-	if err := profile.Validate(); err != nil {
+	if err := target.ValidateSSMMProfileName(profile.Name); err != nil {
 		return SettingsSnapshot{}, err
+	}
+	switch profile.Source {
+	case target.ProfileConfig, target.ProfileFlag, target.ProfileHost, target.ProfileDefault:
+	default:
+		return SettingsSnapshot{}, fmt.Errorf("invalid ssmm profile source %q", profile.Source)
+	}
+	if profile.Source == target.ProfileDefault && profile.Name != "default" {
+		return SettingsSnapshot{}, fmt.Errorf("default ssmm profile source requires profile name default")
 	}
 	if s.Settings == nil {
 		return SettingsSnapshot{}, fmt.Errorf("settings store is unavailable")

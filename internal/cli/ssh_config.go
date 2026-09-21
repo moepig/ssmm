@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/uncho/ssmm/internal/app"
+	"github.com/uncho/ssmm/internal/target"
 )
 
 func (c *CLI) sshConfigCommand() *cobra.Command {
@@ -33,11 +34,14 @@ func (c *CLI) sshConfigAction(name, short string, enabled bool) *cobra.Command {
 			if c.deps.Store == nil {
 				return fmt.Errorf("settings store is unavailable")
 			}
+			name := c.ssmmProfile(cmd).Name
+			if err := target.ValidateSSMMProfileName(name); err != nil {
+				return exitError(2, "%v", err)
+			}
 			draft, err := c.deps.Store.ReadForUpdate(cmd.Context(), true)
 			if err != nil {
 				return err
 			}
-			name := c.ssmmProfile(cmd).Name
 			profile := draft.Snapshot.Profile(name)
 			profile.Integration = enabled
 			if draft.Snapshot.Profiles == nil {
