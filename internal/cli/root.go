@@ -192,6 +192,9 @@ func (c *CLI) runInventory(cmd *cobra.Command, name string, nonInteractive bool)
 }
 
 func (c *CLI) searchAndChoose(cmd *cobra.Command, name string, nonInteractive bool) (app.SearchResult, error) {
+	if name != "" {
+		nonInteractive = true
+	}
 	if nonInteractive || !terminal.Available() {
 		result, err := c.runInventory(cmd, name, nonInteractive)
 		if err != nil {

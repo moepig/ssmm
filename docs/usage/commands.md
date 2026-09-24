@@ -74,7 +74,9 @@ ssmm connect -p company-prod --filter web
 
 ## 対象選択
 
-操作端末が使える場合、ルート、`connect`、`ssh`、`scp` は検索結果を順次表示する。TARGET を指定して候補が 1 件になった場合も、Enter キーで選択する。停止中などのインスタンスも表示するが、選択できるのは `running` の行だけである。
+TARGET を指定した場合、ルート、`connect`、`ssh`、`scp` は検索完了後に候補が 1 件なら接続し、0 件または複数件ならエラーになる。操作端末が使える場合も選択画面を開かない。
+
+TARGET を省略して操作端末が使える場合、ルート、`connect`、`ssh` は検索結果を順次表示する。候補が 1 件でも Enter キーで選択する。停止中などのインスタンスも表示するが、選択できるのは `running` の行だけである。
 
 対話画面の操作を、以下にまとめる。
 
@@ -93,12 +95,12 @@ ssmm connect -p company-prod --filter web
 
 検索途中でも取得済みの行を手動選択できる。検索全体の成功を確認してから対象を決める必要がある場合は、`--non-interactive` を使う。
 
-`--non-interactive` を指定した場合、または `/dev/tty` を開けない場合は、全リージョンの EC2 取得成功と検索終了を待つ。候補が 1 件で `running` の場合だけ接続し、0 件、複数件、不完全な検索結果では失敗する。停止中の行も候補数に含める。
+TARGET または `--non-interactive` を指定した場合、または `/dev/tty` を開けない場合は、全検索範囲の EC2 取得成功と検索終了を待つ。候補が 1 件で `running` の場合だけ接続し、0 件、複数件、不完全な検索結果では失敗する。停止中の行も候補数に含める。
 
 一意な対象へ選択画面を開かずに接続する例を、以下に示す。
 
 ```sh
-ssmm connect web-01 -p company-prod --region ap-northeast-1 --non-interactive
+ssmm connect web-01 -p company-prod --region ap-northeast-1
 ```
 
 `--non-interactive` が無効にするのは ssmm の対象選択である。SSH のホスト鍵確認、鍵のパスフレーズなど、外部コマンドの入力は別に発生し得る。
