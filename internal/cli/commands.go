@@ -37,7 +37,6 @@ func (c *CLI) scpCommand() *cobra.Command {
 	cmd.Flags().String("identity-file", "", "SSH identity file")
 	cmd.Flags().Int("port", 0, "SSH port")
 	cmd.Flags().Bool("recursive", false, "copy directories recursively")
-	cmd.Flags().Bool("non-interactive", false, "disable target selection")
 	return cmd
 }
 
@@ -268,8 +267,7 @@ func (c *CLI) runSSH(cmd *cobra.Command, args []string) error {
 		}
 		user = flagUser
 	}
-	nonInteractive, _ := cmd.Flags().GetBool("non-interactive")
-	result, err := c.searchAndChoose(cmd, stripUser(name), nonInteractive)
+	result, err := c.searchAndChoose(cmd, stripUser(name))
 	if err != nil {
 		return err
 	}
@@ -297,8 +295,7 @@ func (c *CLI) runSCP(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return exitError(2, "%v", err)
 	}
-	nonInteractive, _ := cmd.Flags().GetBool("non-interactive")
-	result, err := c.searchAndChoose(cmd, transfer.Target, nonInteractive)
+	result, err := c.searchAndChoose(cmd, transfer.Target)
 	if err != nil {
 		return err
 	}

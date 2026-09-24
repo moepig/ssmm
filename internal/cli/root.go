@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -141,7 +140,6 @@ func (c *CLI) connectCommand() *cobra.Command {
 func addSearchFlags(cmd *cobra.Command) {
 	addConnectionFlags(cmd)
 	cmd.Flags().String("filter", "", "case-insensitive partial-match filter")
-	cmd.Flags().Bool("non-interactive", false, "disable target selection")
 }
 
 func addConnectionFlags(cmd *cobra.Command) {
@@ -156,8 +154,7 @@ func (c *CLI) runConnect(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		name = args[0]
 	}
-	nonInteractive, _ := cmd.Flags().GetBool("non-interactive")
-	result, err := c.searchAndChoose(cmd, name, nonInteractive)
+	result, err := c.searchAndChoose(cmd, name)
 	if err != nil {
 		return err
 	}
@@ -179,7 +176,7 @@ func (c *CLI) runConnect(cmd *cobra.Command, args []string) error {
 	return processExit(processResult)
 }
 
-func (c *CLI) runInventory(cmd *cobra.Command, name string, nonInteractive bool) (app.SearchResult, error) {
+func (c *CLI) runInventory(cmd *cobra.Command, name string) (app.SearchResult, error) {
 	req, err := c.searchRequest(cmd, name)
 	if err != nil {
 		return app.SearchResult{}, exitError(2, "%v", err)
@@ -191,16 +188,13 @@ func (c *CLI) runInventory(cmd *cobra.Command, name string, nonInteractive bool)
 	return app.SearchResult{Profile: req.Profile, AWSProfile: settings.AWSSelection(req.Profile.Name, req.AWSProfile), Settings: settings, Scope: scope, Snapshot: snapshot, Query: q, Filter: req.Filter}, nil
 }
 
-func (c *CLI) searchAndChoose(cmd *cobra.Command, name string, nonInteractive bool) (app.SearchResult, error) {
-	if name != "" {
-		nonInteractive = true
-	}
-	if nonInteractive || !terminal.Available() {
-		result, err := c.runInventory(cmd, name, nonInteractive)
+func (c *CLI) searchAndChoose(cmd *cobra.Command, name string) (app.SearchResult, error) {
+	if name != "" || !terminal.Available() {
+		result, err := c.runInventory(cmd, name)
 		if err != nil {
 			return app.SearchResult{}, err
 		}
-		resolved, err := c.choose(cmd.Context(), result, name, true)
+		resolved, err := c.choose(result)
 		if err != nil {
 			return app.SearchResult{}, err
 		}
@@ -263,37 +257,8 @@ func (c *CLI) interactiveSearch(cmd *cobra.Command, req app.SearchRequest) (app.
 	}
 }
 
-func (c *CLI) choose(ctx context.Context, result app.SearchResult, name string, nonInteractive bool) (target.ResolvedTarget, error) {
-	filter := result.Filter
-	query := result.Query
-	profile := result.AWSProfile
-	if name != "" && result.Snapshot.Finished && result.Snapshot.EC2Complete && len(app.Candidates(result.Snapshot, query, filter)) == 1 {
-		resolved, err := app.ResolveSnapshot(profile, result.Snapshot, query, filter, nil, target.ResolvedUnique)
-		if err != nil {
-			return target.ResolvedTarget{}, err
-		}
-		return resolved, nil
-	}
-	if nonInteractive || !terminal.Available() {
-		resolved, err := app.ResolveSnapshot(profile, result.Snapshot, query, filter, nil, target.ResolvedUnique)
-		if err != nil {
-			return target.ResolvedTarget{}, err
-		}
-		return resolved, nil
-	}
-	tty, err := terminal.Open()
-	if err != nil {
-		return target.ResolvedTarget{}, err
-	}
-	defer tty.Close()
-	selection, err := tui.Select(ctx, tty.File, tty.File, result.Snapshot, filter)
-	if err != nil {
-		return target.ResolvedTarget{}, err
-	}
-	if selection.Canceled {
-		return target.ResolvedTarget{}, exitError(130, "selection canceled")
-	}
-	return app.ResolveSnapshot(profile, result.Snapshot, query, selection.Filter, &selection.Key, target.ResolvedManual)
+func (c *CLI) choose(result app.SearchResult) (target.ResolvedTarget, error) {
+	return app.ResolveSnapshot(result.AWSProfile, result.Snapshot, result.Query, result.Filter, nil, target.ResolvedUnique)
 }
 
 func stripUser(value string) string {

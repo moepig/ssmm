@@ -160,13 +160,7 @@ ssmm connect web-01 -s prod
 ssmm connect i-0123456789abcdef0 -p company-prod -r ap-northeast-1
 ```
 
-TARGET を指定した場合は、全検索範囲の EC2 取得に成功し、候補が 1 件で running なら選択画面を開かずに接続する。0 件または複数件ならエラーになる。TARGET を省略した場合は、操作端末で接続先を選択する。TARGET を省略して選択画面も開かない例を、以下に示す。
-
-```sh
-ssmm connect -s prod --filter web-01 --non-interactive
-```
-
---non-interactive では、全検索範囲の EC2 取得に成功し、候補が 1 件で running の場合だけ接続する。
+TARGET を指定した場合は、全検索範囲の EC2 取得に成功し、候補が 1 件で running なら選択画面を開かずに接続する。0 件または複数件ならエラーになる。TARGET を省略した場合は、操作端末で接続先を選択する。操作端末がない場合も、検索が完了して一意な running の候補がある場合だけ接続する。
 
 ### ssh・scp（experimental）
 

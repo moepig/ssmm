@@ -124,7 +124,7 @@ ssmm init prod --all-regions
 | `--identity-file PATH` | SSH 鍵ファイルの既定値を保存する。`--ssh` が必要 |
 | `--port PORT` | SSH ポートの既定値を保存する。`--ssh` が必要 |
 
-`--region`、`--regions`、`--all-regions` は併用しない。フラグによる更新では、指定していない設定を維持する。`init` には `--non-interactive` はなく、自動処理では更新する設定用フラグを明示する。
+`--region`、`--regions`、`--all-regions` は併用しない。フラグによる更新では、指定していない設定を維持する。自動処理では更新する設定用フラグを明示する。
 
 対話入力では、リージョン欄を空にすると全リージョンへ変更する。AWS プロファイル、SSH ユーザー、鍵、ポートの各欄を空にすると既存値を維持する。SSH の 3 項目は `--ssh` を指定した場合だけ表示する。`cancel` または Esc を入力して Enter を押すか、Ctrl+C で保存せずに終了する。
 

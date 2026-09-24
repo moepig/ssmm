@@ -35,7 +35,6 @@ SSH、転送、proxy、`ssh-config` の操作例は [SSH とファイル転送](
 | `--region REGION` / `-r REGION` | 1 リージョンに限定 | ルート、`connect`、`list`、`ssh`、`scp`、`proxy` |
 | `--filter TEXT` | 大文字・小文字を区別しない部分一致 | ルート、`connect`、`list`、`ssh` |
 | `--tag KEY=VALUE` / `-t KEY=VALUE` | EC2 タグの完全一致。繰り返し指定可能 | ルート、`connect`、`list`、`ssh`、`scp`、`proxy` |
-| `--non-interactive` | 対象選択画面を開かず、候補の一意性を要求 | ルート、`connect`、`ssh`、`scp` |
 
 ssmm プロファイルを指定しない場合は設定ファイルを読み込まない。`-s` を指定した場合も、実行時の `-p` と `-r` が保存値より優先する。`init` と `ssh-config` の保存先指定は、[設定](configuration.md) を参照。
 
@@ -46,7 +45,7 @@ ssmm -p company-prod -r ap-northeast-1 -t Environment=production
 ssmm list -p company-prod -r ap-northeast-1 -t Service=web
 ```
 
-`list` も `--non-interactive` を受け付けるが、指定の有無によらず選択画面は開かない。`proxy` も常に非対話である。
+`list` と `proxy` は常に非対話であり、選択画面を開かない。
 
 ### TARGET とタグ
 
@@ -93,9 +92,9 @@ TARGET を省略して操作端末が使える場合、ルート、`connect`、`
 
 選択対象が現在の候補にない場合は表示マーカーを消す。対象が再び候補へ現れるまで Enter は接続を確定しない。対象が消失した状態で別の対象へ移るには、↑、↓、またはフィルタの編集を行う。
 
-検索途中でも取得済みの行を手動選択できる。検索全体の成功を確認してから対象を決める必要がある場合は、`--non-interactive` を使う。
+検索途中でも取得済みの行を手動選択できる。TARGET を指定した場合は、検索全体の成功を確認してから対象を決める。
 
-TARGET または `--non-interactive` を指定した場合、または `/dev/tty` を開けない場合は、全検索範囲の EC2 取得成功と検索終了を待つ。候補が 1 件で `running` の場合だけ接続し、0 件、複数件、不完全な検索結果では失敗する。停止中の行も候補数に含める。
+TARGET を指定した場合、または `/dev/tty` を開けない場合は、全検索範囲の EC2 取得成功と検索終了を待つ。候補が 1 件で `running` の場合だけ接続し、0 件、複数件、不完全な検索結果では失敗する。停止中の行も候補数に含める。
 
 一意な対象へ選択画面を開かずに接続する例を、以下に示す。
 
@@ -103,10 +102,10 @@ TARGET または `--non-interactive` を指定した場合、または `/dev/tty
 ssmm connect web-01 -p company-prod --region ap-northeast-1
 ```
 
-`--non-interactive` が無効にするのは ssmm の対象選択である。SSH のホスト鍵確認、鍵のパスフレーズなど、外部コマンドの入力は別に発生し得る。
+TARGET を指定して選択画面を省略した場合も、SSH のホスト鍵確認や鍵のパスフレーズなど、外部コマンドの入力は発生し得る。
 
 > [!NOTE]
-> 標準出力をリダイレクトしても、操作端末が使える場合は選択画面を開く。自動処理では `--non-interactive` を明示する。
+> 標準出力をリダイレクトしても、TARGET を省略して操作端末が使える場合は選択画面を開く。自動処理では TARGET を明示する。
 
 ## 一覧出力
 

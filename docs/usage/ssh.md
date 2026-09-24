@@ -78,7 +78,7 @@ ssmm scp -s prod web-01:/tmp/a.txt web-01:/tmp/b.txt ./downloads/
 
 `-r` はリージョン指定である。ディレクトリ転送には `--recursive` を使う。
 
-対応するオプションは `--ssmm-profile` / `-s`、`--profile` / `-p`、`--region` / `-r`、`--tag` / `-t`、`--user`、`--identity-file`、`--port`、`--recursive`、`--non-interactive` である。`--filter`、`-O` や任意の `scp` オプションは受け付けない。
+対応するオプションは `--ssmm-profile` / `-s`、`--profile` / `-p`、`--region` / `-r`、`--tag` / `-t`、`--user`、`--identity-file`、`--port`、`--recursive` である。`--filter`、`-O` や任意の `scp` オプションは受け付けない。
 
 リモート間転送、ローカル間転送、`scp://` URI、IPv6 形式はサポートしない。コロンを含むローカルファイル名には `./` を付ける。空白やシェルの特殊文字を含むパスはシェルで引用する。リモートパスのワイルドカードや `~/` は OpenSSH と SFTP サーバーの解釈に従う。
 

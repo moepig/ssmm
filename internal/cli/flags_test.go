@@ -26,6 +26,24 @@ func TestConnectionShorthands(t *testing.T) {
 	}
 }
 
+// ターゲット選択方式を切り替える廃止済みフラグを各検索コマンドが公開しない。
+func TestNonInteractiveFlagIsRemoved(t *testing.T) {
+	for _, name := range []string{"", "list", "connect", "ssh", "scp"} {
+		root := New(Dependencies{})
+		command := root
+		if name != "" {
+			var err error
+			command, _, err = root.Find([]string{name})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if command.Flags().Lookup("non-interactive") != nil {
+			t.Errorf("%s still exposes --non-interactive", name)
+		}
+	}
+}
+
 // 設定の保存・SSH 設定の生成でも -s が ssmm プロファイルの指定として解釈されることを検証する。
 func TestSettingsProfileShorthandPassesThroughCobra(t *testing.T) {
 	for _, args := range [][]string{

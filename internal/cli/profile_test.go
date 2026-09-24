@@ -49,9 +49,9 @@ func TestCommandsSeparateSSMMAndAWSProfiles(t *testing.T) {
 				search, ssh bool
 			}{
 				{[]string{"list", "-s", "web-prod"}, true, false},
-				{[]string{"connect", "web", "-s", "web-prod", "--non-interactive"}, true, false},
-				{[]string{"ssh", "web", "-s", "web-prod", "--non-interactive"}, true, true},
-				{[]string{"scp", "file", "web:/tmp/file", "-s", "web-prod", "--non-interactive"}, true, true},
+				{[]string{"connect", "web", "-s", "web-prod"}, true, false},
+				{[]string{"ssh", "web", "-s", "web-prod"}, true, true},
+				{[]string{"scp", "file", "web:/tmp/file", "-s", "web-prod"}, true, true},
 				{[]string{"proxy", "web.web-prod.ssmm"}, true, false},
 				{[]string{"proxy", "web", "-s", "web-prod"}, true, false},
 				{[]string{"proxy", "i-01234567", "-s", "web-prod", "--region", "us-east-1"}, false, false},
@@ -201,11 +201,11 @@ func TestCommandsWithoutSSMMProfile(t *testing.T) {
 				args   []string
 				search bool
 			}{
-				{[]string{"web", "--non-interactive"}, true},
+				{[]string{"web"}, true},
 				{[]string{"list"}, true},
-				{[]string{"connect", "web", "--non-interactive"}, true},
-				{[]string{"ssh", "web", "--non-interactive"}, true},
-				{[]string{"scp", "file", "web:/tmp/file", "--non-interactive", "--recursive"}, true},
+				{[]string{"connect", "web"}, true},
+				{[]string{"ssh", "web"}, true},
+				{[]string{"scp", "file", "web:/tmp/file", "--recursive"}, true},
 				{[]string{"proxy", "web"}, true},
 				{[]string{"proxy", "i-01234567"}, false},
 			} {
