@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"github.com/uncho/ssmm/internal/session"
 	"github.com/uncho/ssmm/internal/target"
 	"github.com/uncho/ssmm/internal/terminal"
+	"github.com/uncho/ssmm/internal/tui"
 )
 
 func (c *CLI) sshCommand() *cobra.Command {
@@ -80,7 +80,7 @@ func (c *CLI) initCommand() *cobra.Command {
 		}
 		profile := draft.Snapshot.Profiles[name]
 		if !cmd.Flags().Changed("regions") && !cmd.Flags().Changed("all-regions") && !cmd.Flags().Changed("user") && !cmd.Flags().Changed("identity-file") && !cmd.Flags().Changed("port") && !cmd.Flags().Changed("profile") && !cmd.Flags().Changed("region") && terminal.Available() {
-			if err := c.editInitInteractively(&profile, ssh); err != nil {
+			if err := c.editInitInteractively(cmd, &profile, ssh); err != nil {
 				return err
 			}
 		}
@@ -140,40 +140,23 @@ func (c *CLI) initCommand() *cobra.Command {
 	return cmd
 }
 
-func (c *CLI) editInitInteractively(profile *app.ProfileSettings, ssh bool) error {
+func (c *CLI) editInitInteractively(cmd *cobra.Command, profile *app.ProfileSettings, ssh bool) error {
 	tty, err := terminal.Open()
 	if err != nil {
 		return err
 	}
 	defer tty.Close()
-	reader := bufio.NewReader(tty.File)
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGHUP)
-	defer signal.Stop(signals)
+	ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGHUP)
+	defer stop()
 	read := func(label, current string) (string, error) {
-		fmt.Fprintf(tty.File, "%s [%s]: ", label, current)
-		result := make(chan struct {
-			value string
-			err   error
-		}, 1)
-		go func() {
-			value, err := reader.ReadString('\n')
-			result <- struct {
-				value string
-				err   error
-			}{value: value, err: err}
-		}()
-		var value string
-		select {
-		case <-signals:
+		value, canceled, err := tui.Prompt(ctx, tty.File, tty.File, label, current)
+		if canceled || ctx.Err() != nil {
 			return "", exitError(130, "initialization canceled")
-		case read := <-result:
-			if read.err != nil {
-				return "", exitError(130, "initialization canceled")
-			}
-			value = read.value
 		}
-		value = strings.TrimSpace(strings.TrimSuffix(value, "\n"))
+		if err != nil {
+			return "", err
+		}
+		value = strings.TrimSpace(value)
 		if strings.EqualFold(value, "cancel") || value == "\x1b" {
 			return "", exitError(130, "initialization canceled")
 		}

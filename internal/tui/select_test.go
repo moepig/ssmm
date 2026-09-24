@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/rivo/uniseg"
@@ -101,5 +102,33 @@ func TestSelectModelRetainsMissingFocusForRefresh(t *testing.T) {
 		}
 	default:
 		t.Fatal("refresh action was not emitted")
+	}
+}
+
+func TestSelectModelBackspaceRemovesLastGrapheme(t *testing.T) {
+	tests := []struct {
+		name  string
+		key   tea.KeyType
+		input string
+		want  string
+	}{
+		{name: "DEL", key: tea.KeyBackspace, input: "web", want: "we"},
+		{name: "BS", key: tea.KeyCtrlH, input: "web", want: "we"},
+		{name: "multibyte rune", key: tea.KeyBackspace, input: "東京", want: "東"},
+		{name: "combining grapheme", key: tea.KeyCtrlH, input: "e\u0301x", want: "e\u0301"},
+		{name: "combining grapheme only", key: tea.KeyBackspace, input: "e\u0301", want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := selectModel{filter: test.input}
+			updated, _ := m.Update(tea.KeyMsg{Type: test.key})
+			got := updated.(selectModel).filter
+			if got != test.want {
+				t.Fatalf("filter after backspace = %q, want %q", got, test.want)
+			}
+			if !utf8.ValidString(got) {
+				t.Fatalf("filter after backspace is invalid UTF-8: %q", got)
+			}
+		})
 	}
 }

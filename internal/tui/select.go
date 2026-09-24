@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/rivo/uniseg"
 	"github.com/uncho/ssmm/internal/inventory"
 	"github.com/uncho/ssmm/internal/render"
 	"github.com/uncho/ssmm/internal/target"
@@ -148,13 +149,13 @@ func (m selectModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyDown:
 			m.moveFocus(1)
 			return m, nil
-		case tea.KeyBackspace:
+		case tea.KeyBackspace, tea.KeyCtrlH:
 			if len(m.filter) > 0 {
-				m.filter = m.filter[:len(m.filter)-1]
+				m.filter = removeLastGrapheme(m.filter)
 				m.resetFocus()
 			}
 			return m, nil
-		case tea.KeyRunes:
+		case tea.KeyRunes, tea.KeySpace:
 			m.filter += string(key.Runes)
 			m.resetFocus()
 			return m, nil
@@ -169,6 +170,15 @@ func (m selectModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func removeLastGrapheme(value string) string {
+	graphemes := uniseg.NewGraphemes(value)
+	start := 0
+	for graphemes.Next() {
+		start, _ = graphemes.Positions()
+	}
+	return value[:start]
 }
 
 func (m selectModel) View() string {
