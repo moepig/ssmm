@@ -22,7 +22,7 @@ AWS プロファイルの選択順序を、以下にまとめる。
 ssmm の `prod` に AWS の `company-prod` を割り当てる例を、以下に示す。
 
 ```sh
-ssmm init -s prod -p company-prod -r ap-northeast-1
+ssmm init prod -p company-prod -r ap-northeast-1
 ssmm list -s prod
 ```
 
@@ -99,21 +99,22 @@ SSH の指定値の優先順位は、[SSH とファイル転送](ssh.md#ssh-の�
 
 ## 初期設定と更新
 
-`init` は選択した ssmm プロファイルの AWS プロファイル名と検索リージョンを作成または更新する。保存先は `-s` で指定し、省略時は `default` とする。`--ssh` を指定した場合に限り、SSH ユーザー、鍵ファイル、ポートも設定できる。設定値を渡すフラグを指定せず、操作端末が使える場合は対話入力を開始する。`--ssh` だけを指定した場合も対話入力を開始する。
+`init` は指定した ssmm プロファイルの AWS プロファイル名と検索リージョンを作成または更新する。保存先は位置引数で指定し、省略時は `default` とする。`--ssmm-profile` / `-s` でも指定できる。位置引数とフラグを併用する場合は同じ名前を指定すること。`--ssh` を指定した場合に限り、SSH ユーザー、鍵ファイル、ポートも設定できる。設定値を渡すフラグを指定せず、操作端末が使える場合は対話入力を開始する。`--ssh` だけを指定した場合も対話入力を開始する。
 
 AWS プロファイル名、リージョン、SSH の既定値を保存する例を、以下に示す。
 
 ```sh
-ssmm init -s prod --profile company-prod --regions ap-northeast-1,us-east-1
-ssmm init --ssh -s prod --user ec2-user --identity-file ~/.ssh/prod.pem --port 22
-ssmm init -s prod --all-regions
+ssmm init prod --profile company-prod --regions ap-northeast-1,us-east-1
+ssmm init prod --ssh --user ec2-user --identity-file ~/.ssh/prod.pem --port 22
+ssmm init prod --all-regions
 ```
 
 設定用フラグの一覧を、以下にまとめる。
 
-| フラグ | 意味 |
+| 引数またはフラグ | 意味 |
 | --- | --- |
-| `--ssmm-profile NAME` / `-s NAME` | 保存先の ssmm プロファイルを選択する。省略時は `default` |
+| `[SSMM_PROFILE]` | 保存先の ssmm プロファイルを選択する。省略時は `default` |
+| `--ssmm-profile NAME` / `-s NAME` | 保存先の ssmm プロファイルを選択する。位置引数と併用する場合は同じ名前を指定する |
 | `--profile NAME` / `-p NAME` | 使用する AWS プロファイル名を保存する。空文字列で指定を解除する |
 | `--region REGION` / `-r REGION` | 単一の検索リージョンを保存する |
 | `--ssh` | SSH 用の設定フラグと対話入力を有効にする |

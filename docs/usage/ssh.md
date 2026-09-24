@@ -89,7 +89,7 @@ ssmm scp -s prod web-01:/tmp/a.txt web-01:/tmp/b.txt ./downloads/
 ssmm プロファイル `prod` に AWS プロファイル `company-prod` と SSH の既定値を保存し、SSH 設定を作成する例を、以下に示す。
 
 ```sh
-ssmm init --ssh -s prod --profile company-prod --regions ap-northeast-1 --user ec2-user --identity-file ~/.ssh/prod.pem
+ssmm init prod --ssh --profile company-prod --regions ap-northeast-1 --user ec2-user --identity-file ~/.ssh/prod.pem
 ssmm ssh-config create -s prod
 ssh web-01.prod.ssmm
 scp ./report.csv web-01.prod.ssmm:/tmp/report.csv

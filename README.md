@@ -104,7 +104,7 @@ ssmm -r ap-northeast-1
 繰り返し使う AWS プロファイルと検索リージョンを、ssmm プロファイルに保存する。prod という名前で保存し、その設定で接続する例を、以下に示す。
 
 ```sh
-ssmm init -s prod -p company-prod -r ap-northeast-1
+ssmm init prod -p company-prod -r ap-northeast-1
 ssmm -s prod
 ssmm web-01 -s prod
 ```
@@ -120,7 +120,7 @@ ssmm -s prod -r us-east-1
 SSH のユーザーと鍵も保存できる。接続先の SSH サーバーと公開鍵を準備したうえで、標準の ssh・scp から接続する設定例を、以下に示す。ec2-user と鍵ファイルのパスは実際の値に置き換える。
 
 ```sh
-ssmm init --ssh -s prod --user ec2-user --identity-file ~/.ssh/prod.pem
+ssmm init prod --ssh --user ec2-user --identity-file ~/.ssh/prod.pem
 ssmm ssh-config create -s prod
 ssh web-01.prod.ssmm
 scp ./report.csv web-01.prod.ssmm:/tmp/report.csv
@@ -191,11 +191,11 @@ ssmm の -p は AWS プロファイル、-r はリージョンの指定である
 
 ### init
 
-ssmm プロファイルを作成・更新する。設定用フラグを省略すると、端末上で対話入力できる。対話入力と複数リージョンの保存の例を、以下に示す。
+ssmm プロファイルを作成・更新する。プロファイル名は位置引数で指定し、省略時は default を使う。設定用フラグを省略すると、端末上で対話入力できる。対話入力と複数リージョンの保存の例を、以下に示す。
 
 ```sh
-ssmm init -s prod
-ssmm init -s prod --regions ap-northeast-1,us-east-1
+ssmm init prod
+ssmm init prod --regions ap-northeast-1,us-east-1
 ```
 
 SSH の既定値を設定する場合は --ssh を付ける。設定項目の詳細は、[設定](docs/usage/configuration.md) を参照。

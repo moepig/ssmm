@@ -14,7 +14,7 @@
 | `ssmm ssh [USER@TARGET]` | 検索と対象選択の後に OpenSSH で接続。対象省略も可能 |
 | `ssmm scp [OPTIONS] SRC... DEST` | ローカルと 1 台の EC2 の間でファイル転送。experimental |
 | `ssmm proxy TARGET` | OpenSSH の `ProxyCommand` 用の通信ストリーム |
-| `ssmm init` | AWS プロファイル名と検索リージョンを保存。`--ssh` 指定時は SSH の既定値も設定 |
+| `ssmm init [SSMM_PROFILE]` | AWS プロファイル名と検索リージョンを保存。`--ssh` 指定時は SSH の既定値も設定 |
 | `ssmm ssh-config create` | 選択したプロファイルの標準 SSH 用設定を作成・更新 |
 | `ssmm ssh-config delete` | 選択したプロファイルの標準 SSH 用設定を削除 |
 | `ssmm completion SHELL` | シェル補完スクリプトを出力 |

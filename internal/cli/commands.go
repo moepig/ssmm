@@ -53,15 +53,25 @@ func (c *CLI) proxyCommand() *cobra.Command {
 func (c *CLI) initCommand() *cobra.Command {
 	var regions []string
 	var allRegions bool
-	cmd := &cobra.Command{Use: "init", Short: "create or update ssmm settings", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Use: "init [SSMM_PROFILE]", Short: "create or update ssmm settings", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		ssh, _ := cmd.Flags().GetBool("ssh")
 		if !ssh && (cmd.Flags().Changed("user") || cmd.Flags().Changed("identity-file") || cmd.Flags().Changed("port")) {
 			return exitError(2, "--user, --identity-file, and --port require --ssh")
 		}
+		name := "default"
+		if len(args) == 1 {
+			name = args[0]
+		}
+		if cmd.Flags().Changed("ssmm-profile") {
+			flagName, _ := cmd.Flags().GetString("ssmm-profile")
+			if len(args) == 1 && flagName != name {
+				return exitError(2, "positional ssmm profile %q conflicts with --ssmm-profile %q", name, flagName)
+			}
+			name = flagName
+		}
 		if c.deps.Store == nil {
 			return fmt.Errorf("settings store is unavailable")
 		}
-		name := c.ssmmProfile(cmd).Name
 		if err := target.ValidateSSMMProfileName(name); err != nil {
 			return exitError(2, "%v", err)
 		}

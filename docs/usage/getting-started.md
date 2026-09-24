@@ -77,7 +77,7 @@ ssmm が検索に使う API と用途を、以下にまとめる。
 AWS プロファイルと検索リージョンを ssmm プロファイルへ保存する場合は、次のコマンドを実行する。`init` は AWS の認証情報を作成せず、ローカルの設定ファイルを更新する。
 
 ```sh
-ssmm init -s prod -p company-prod -r ap-northeast-1
+ssmm init prod -p company-prod -r ap-northeast-1
 ssmm list -s prod
 ssmm connect web-01 -s prod
 ```

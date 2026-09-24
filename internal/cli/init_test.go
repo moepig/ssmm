@@ -174,3 +174,57 @@ func TestInitStoresRelativeIdentityFileAgainstInvocationDirectory(t *testing.T) 
 		t.Fatalf("config did not persist the resolved identity file: %s", data)
 	}
 }
+
+func TestInitAcceptsPositionalSSMMProfile(t *testing.T) {
+	store, _ := sshConfigTestStore(t)
+	run := func(args ...string) {
+		t.Helper()
+		command := New(Dependencies{Store: store, Output: &bytes.Buffer{}})
+		command.SetArgs(args)
+		if err := command.Execute(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("init", "web-prod", "--profile", "company-prod", "--regions", "ap-northeast-1")
+	run("init", "web-prod", "--region", "us-east-1")
+	run("init", "--profile", "default-aws")
+	run("init", "web-prod", "--ssmm-profile", "web-prod", "--region", "us-west-2")
+	run("init", "ssh-prod", "--ssh", "--user", "ubuntu")
+
+	snapshot, err := store.Read(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	webProd := snapshot.Profile("web-prod")
+	if webProd.AWSProfile != "company-prod" || webProd.Regions == nil || len(*webProd.Regions) != 1 || (*webProd.Regions)[0] != "us-west-2" {
+		t.Fatalf("positional profile was not created and updated: %#v", webProd)
+	}
+	if snapshot.Profile("default").AWSProfile != "default-aws" {
+		t.Fatalf("omitted positional profile did not use default: %#v", snapshot.Profile("default"))
+	}
+	if snapshot.Profile("ssh-prod").SSH.User != "ubuntu" {
+		t.Fatalf("positional profile did not accept SSH settings: %#v", snapshot.Profile("ssh-prod"))
+	}
+}
+
+func TestInitRejectsInvalidPositionalSSMMProfile(t *testing.T) {
+	for _, args := range [][]string{
+		{"init", ""},
+		{"init", "valid", "extra"},
+		{"init", "bad!name"},
+		{"init", "positional", "--ssmm-profile", "flag"},
+		{"init", "positional", "--user", "ubuntu"},
+	} {
+		t.Run(strings.Join(args[1:], "_"), func(t *testing.T) {
+			store, paths := sshConfigTestStore(t)
+			command := New(Dependencies{Store: store, Output: &bytes.Buffer{}})
+			command.SetArgs(args)
+			if err := command.Execute(); err == nil {
+				t.Fatalf("invalid init arguments accepted: %v", args)
+			}
+			if _, err := os.Stat(paths.ConfigFile); !os.IsNotExist(err) {
+				t.Fatalf("invalid init arguments saved config: %v", err)
+			}
+		})
+	}
+}
