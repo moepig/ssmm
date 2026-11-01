@@ -33,15 +33,15 @@ func (r Runner) Run(ctx context.Context, spec execplan.ProcessSpec, streams exec
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = in, out, errOut
 	cmd.Env = environment(spec.EnvironmentPolicy)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	signals := make(chan os.Signal, 4)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signals)
 	if err := cmd.Start(); err != nil {
 		return execplan.ProcessResult{}, fmt.Errorf("start %s: %w", spec.Executable, err)
 	}
 	terminal := claimTerminal(in, spec.Mode, cmd.Process.Pid)
 	defer terminal.restore()
 	result := execplan.ProcessResult{Started: true, ExitCode: -1}
-	signals := make(chan os.Signal, 4)
-	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
-	defer signal.Stop(signals)
 	ctxDone := ctx.Done()
 	wait := make(chan error, 1)
 	go func() { wait <- cmd.Wait() }()
