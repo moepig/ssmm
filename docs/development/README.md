@@ -1,6 +1,6 @@
 # 開発ガイド
 
-本ドキュメントは、ssmm のビルドとテスト、リリース手順、内部構成と仕様の参照先、設計記録の位置付けを説明する。
+本ドキュメントはssmm のビルドとテスト、リリース手順、内部構成と仕様の参照先、設計記録の位置付けを説明する。
 
 ## 開発環境
 
@@ -25,11 +25,13 @@ go test -race ./...
 
 ## リリース
 
-[依存更新とリリース](../dependency-release.md)に従い、release-please が作成するリリース PR をレビューしてマージする。CI の開始承認後に全テストを通し、タグとマージ SHA の一致を確認して配布する。
+main への push または手動実行で release-please が未公開変更を確認し、fix・feat などがあればリリース PR を作成・更新する。定期実行は行わない。GITHUB_TOKEN による依存 PR の自動マージ後は、Release Please を main、tag 空欄で手動実行する。
 
-GoReleaser v2 で Linux と macOS の amd64・arm64 バイナリを作成する。配布名は ssmm_<version>_<os>_<arch> とし、SHA-256 の checksums.txt を添付する。バージョンは ssmm --version で確認できる。
+管理者は CI の開始承認と内容のレビューを行い、リリース PR を手動でマージする。マージに伴う main への push で公開処理が自動起動し、タグと draft Release を作成する。配布処理でタグとマージ SHA を照合してからビルド・配布する。[依存更新とリリース](../dependency-release.md#公開)にフロー図と手順を示す。
 
-公開前の設定とビルドは、次のコマンドで確認する。snapshot は dist/ に生成され、公開されない。
+GoReleaser v2 で Linux と macOS の amd64・arm64 バイナリを作成する。ファイル名は `ssmm_<version>_<os>_<arch>` とし、SHA-256 の checksums.txt を添付する。バイナリのバージョンは `ssmm --version` で確認できる。
+
+次のコマンドで設定と公開前のビルドを確認する。snapshot は dist/ に生成され、公開されない。
 
 ```sh
 goreleaser check
