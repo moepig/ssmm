@@ -4,7 +4,7 @@
 
 ## 開発環境
 
-Go の最低バージョンは [go.mod](../../go.mod) の `go 1.24` である。依存バージョンは `go.mod` と `go.sum` で管理する。設定ロックと端末処理は Unix 専用であり、Windows ネイティブ向けのビルドは対象外である。
+Go の最低バージョンは [go.mod](../../go.mod) の go ディレクティブに従う。依存バージョンは `go.mod` と `go.sum` で管理する。設定ロックと端末処理は Unix 専用であり、Windows ネイティブ向けのビルドは対象外である。
 
 リポジトリのルートで、次のコマンドを実行する。
 
@@ -25,25 +25,18 @@ go test -race ./...
 
 ## リリース
 
-`v*` タグを push すると、GitHub Actions で GoReleaser v2 を実行する。`go test ./...` の成功後、Linux と macOS の amd64・arm64 向けバイナリをビルドし、GitHub Releases に公開する。プレリリースのバージョンは GitHub Releases でもプレリリースとして扱う。
+[依存更新とリリース](../dependency-release.md)に従い、release-please が作成するリリース PR をレビューしてマージする。CI の開始承認後に全テストを通し、タグとマージ SHA の一致を確認して配布する。
 
-配布物は `ssmm_<version>_<os>_<arch>` という名前のバイナリと SHA-256 の `checksums.txt` である。macOS の OS 名は `darwin` となる。バイナリにはリリースバージョンを埋め込み、`ssmm --version` で表示する。公開には workflow の `GITHUB_TOKEN` を使う。
+GoReleaser v2 で Linux と macOS の amd64・arm64 バイナリを作成する。配布名は ssmm_<version>_<os>_<arch> とし、SHA-256 の checksums.txt を添付する。バージョンは ssmm --version で確認できる。
 
-GoReleaser v2 を用意し、リポジトリのルートで次のコマンドを実行すると、設定と公開前のビルドを確認できる。snapshot は `dist/` に生成され、GitHub Releases には公開されない。
+公開前の設定とビルドは、次のコマンドで確認する。snapshot は dist/ に生成され、公開されない。
 
 ```sh
 goreleaser check
 goreleaser release --snapshot --clean --parallelism 1
 ```
 
-リリース対象のコミットに SemVer のタグを付け、そのタグを push する。`v0.1.0` を公開する場合のコマンドを、以下に示す。
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-設定の詳細は、[GoReleaser 設定](../../.goreleaser.yaml) と [Release workflow](../../.github/workflows/release.yaml) を参照。
+設定は [GoReleaser](../../.goreleaser.yaml)、[リリース制御](../../.github/workflows/release-control.yml)、[配布処理](../../.github/workflows/distribute.yml)に定義する。
 
 ## ドキュメント構成
 
@@ -76,7 +69,7 @@ git push origin v0.1.0
 
 テスト成功だけで、実 AWS 上の認証経路や Session Manager 接続を確認したことにはならない。Floci のスクリプトも接続部分をダミーの実行ファイルへ置換する。
 
-接続やプロセス管理を変更した場合は、実行対象環境で AWS CLI、Session Manager plugin、OpenSSH、SSM Agent のバージョンを記録し、シェル接続、SSH、転送、キャンセル後の子プロセス終了を確認する。認証処理を変更した場合は、SDK と CLI の両方が同じ意図の認証経路を使用することを確認する。
+接続やプロセス管理を変更した場合は、実行対象環境で AWS CLI、Session Manager plugin、OpenSSH、SSM Agent のバージョンを記録する。シェル接続、SSH、転送、キャンセル後の子プロセス終了を確認する。認証処理を変更した場合は、SDK と CLI の両方が同じ意図の認証経路を使用することを確認する。
 
 ## 設計記録
 

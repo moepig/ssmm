@@ -23,7 +23,7 @@ builds:
       - -s -w -X main.version={{ .Version }}
 
 archives:
-  - formats: [binary]
+  - formats: [ binary ]
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
 checksum:
@@ -31,12 +31,11 @@ checksum:
   algorithm: sha256
 
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
+  disable: true
 
 release:
   prerelease: auto
+  draft: true
+  use_existing_draft: true
+  replace_existing_artifacts: true
+  mode: keep-existing
