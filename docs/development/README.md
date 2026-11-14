@@ -36,7 +36,7 @@ goreleaser check
 goreleaser release --snapshot --clean --parallelism 1
 ```
 
-設定は [GoReleaser](../../.goreleaser.yaml)、[リリース制御](../../.github/workflows/release-control.yml)、[配布処理](../../.github/workflows/distribute.yml)に定義する。
+設定は [GoReleaser](../../.goreleaser.yaml)、[Release Please](../../.github/workflows/release-please.yml)、[配布処理](../../.github/workflows/distribute.yml)に定義する。
 
 ## ドキュメント構成
 
