@@ -27,7 +27,7 @@ go test -race ./...
 
 専用 Automation App が main の push から release-please のリリース PR を作成・更新する。人が内容と CI を確認してマージする。マージの push からタグと draft を作成し、同じワークフローの後続ジョブでビルドと公開を行う。
 
-GoReleaser の build で Linux と macOS の amd64・arm64 バイナリを作成する。ファイル名は ssmm_VERSION_OS_ARCH とし、SHA-256 の checksums.txt を添付する。公開ジョブは配布物を実行せず、公開記録と照合して不足分だけを追加する。バージョンは ssmm --version で確認できる。
+リリースは既存 Action と標準コマンドで行う。公開後は immutable releases で保護する。一部配布後の失敗は管理者が調査し、修正版を別バージョンで公開する。詳細は依存更新とリリースの手順に従う。
 
 設定とビルドを公開せずに確認するコマンドを、次に示す。
 
@@ -35,8 +35,6 @@ GoReleaser の build で Linux と macOS の amd64・arm64 バイナリを作成
 goreleaser check
 goreleaser build --snapshot --clean --parallelism 1
 ```
-
-[依存更新とリリース](../dependency-release.md)で設定と復旧条件を確認する。定義は [GoReleaser](../../.goreleaser.yaml)、[Release Please](../../.github/workflows/release-please.yml)、[配布ポリシー](../../.github/scripts/release-policy.json)に置く。
 
 ## ドキュメント構成
 
