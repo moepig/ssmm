@@ -36,7 +36,7 @@ changelog:
 release:
   prerelease: auto
   draft: false
-  use_existing_draft: false
+  use_existing_draft: true
   replace_existing_artifacts: false
   mode: keep-existing
   replace_existing_draft: false
