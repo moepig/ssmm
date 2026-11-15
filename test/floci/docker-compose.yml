@@ -1,6 +1,6 @@
 services:
   floci:
-    image: floci/floci:latest-compat
+    image: floci/floci:latest-compat@sha256:954ea3f472c85c569569ab81d8e79a28dd15a769c10ab8374c106537aa45fc1d
     ports:
       - "4566:4566"
     environment:

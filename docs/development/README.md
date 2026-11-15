@@ -25,20 +25,18 @@ go test -race ./...
 
 ## リリース
 
-main への push または手動実行で release-please が未公開変更を確認し、fix・feat などがあればリリース PR を作成・更新する。定期実行は行わない。GITHUB_TOKEN による依存 PR の自動マージ後は、Release Please を main、tag 空欄で手動実行する。
+専用 Automation App が main の push から release-please のリリース PR を作成・更新する。人が内容と CI を確認してマージする。マージの push からタグと draft を作成し、同じワークフローの後続ジョブでビルドと公開を行う。
 
-管理者は CI の開始承認と内容のレビューを行い、リリース PR を手動でマージする。マージに伴う main への push で公開処理が自動起動し、タグと draft Release を作成する。配布処理でタグとマージ SHA を照合してからビルド・配布する。[依存更新とリリース](../dependency-release.md#公開)にフロー図と手順を示す。
+GoReleaser の build で Linux と macOS の amd64・arm64 バイナリを作成する。ファイル名は ssmm_VERSION_OS_ARCH とし、SHA-256 の checksums.txt を添付する。公開ジョブは配布物を実行せず、公開記録と照合して不足分だけを追加する。バージョンは ssmm --version で確認できる。
 
-GoReleaser v2 で Linux と macOS の amd64・arm64 バイナリを作成する。ファイル名は `ssmm_<version>_<os>_<arch>` とし、SHA-256 の checksums.txt を添付する。バイナリのバージョンは `ssmm --version` で確認できる。
-
-次のコマンドで設定と公開前のビルドを確認する。snapshot は dist/ に生成され、公開されない。
+設定とビルドを公開せずに確認するコマンドを、次に示す。
 
 ```sh
 goreleaser check
-goreleaser release --snapshot --clean --parallelism 1
+goreleaser build --snapshot --clean --parallelism 1
 ```
 
-設定は [GoReleaser](../../.goreleaser.yaml)、[Release Please](../../.github/workflows/release-please.yml)、[配布処理](../../.github/workflows/distribute.yml)に定義する。
+[依存更新とリリース](../dependency-release.md)で設定と復旧条件を確認する。定義は [GoReleaser](../../.goreleaser.yaml)、[Release Please](../../.github/workflows/release-please.yml)、[配布ポリシー](../../.github/scripts/release-policy.json)に置く。
 
 ## ドキュメント構成
 
